@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>台股股利殖利率查詢</title>
+  <style>
+    :root { --navy:#17365d; --blue:#1f4e78; --line:#d9e2f3; --ink:#203040; --bg:#f5f8fc; }
+    * { box-sizing:border-box; } body { margin:0; color:var(--ink); font:16px "Microsoft JhengHei", system-ui, sans-serif; background:var(--bg); }
+    header { background:linear-gradient(120deg,var(--navy),#285f91); color:#fff; padding:42px 24px 54px; }
+    header > div, main { max-width:1050px; margin:auto; } h1 { margin:0 0 8px; font-size:30px; } header p { margin:0; opacity:.85; }
+    main { margin-top:-28px; padding:0 24px 48px; } .search, .card, .history { background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 7px 20px #17365d14; }
+    .search { padding:18px; display:flex; gap:10px; } input { min-width:0; flex:1; padding:12px 14px; border:1px solid #aebed1; border-radius:8px; font:inherit; } button { border:0; border-radius:8px; padding:12px 22px; background:var(--blue); color:#fff; font:inherit; font-weight:bold; cursor:pointer; }
+    button:hover { background:var(--navy); } #message { min-height:24px; margin:14px 2px; color:#6a7180; } #result { display:none; } .titleline { display:flex; align-items:baseline; gap:10px; margin:24px 0 12px; } .titleline h2 { margin:0; font-size:24px; } .badge { background:#e7f3e9; color:#276237; padding:3px 8px; border-radius:999px; font-size:13px; } .badge.offline { background:#fff2cc; color:#856404; }
+    .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; } .card { padding:18px; } .card label { color:#5d6c7c; font-size:14px; } .value { margin-top:8px; color:var(--navy); font-size:27px; font-weight:700; } .hint { margin-top:5px; color:#6b7a8b; font-size:12px; }
+    .history { margin-top:20px; overflow:auto; } table { width:100%; border-collapse:collapse; min-width:760px; } th { background:var(--blue); color:#fff; text-align:left; padding:12px; font-size:14px; } td { padding:11px 12px; border-bottom:1px solid var(--line); } td.num { text-align:right; font-variant-numeric:tabular-nums; } .source { margin:16px 2px; font-size:13px; } a { color:#1f5d91; }
+    @media (max-width:720px) { header { padding-top:28px; } h1 { font-size:25px; } main { padding:0 14px 30px; } .metrics { grid-template-columns:repeat(2,1fr); } .value { font-size:23px; } }
+  </style>
+</head>
+<body>
+  <header><div><h1>台股股利殖利率查詢</h1><p>以最新已公告現金股利與最近收盤價估算殖利率</p></div></header>
+  <main>
+    <form class="search" id="search"><input id="code" inputmode="numeric" value="2891" maxlength="6" aria-label="股票代號" placeholder="輸入股票代號，例如 2891"><button>查詢</button></form>
+    <div id="message">輸入股票代號後按「查詢」。</div>
+    <section id="result">
+      <div class="titleline"><h2 id="stockTitle"></h2><span id="status" class="badge"></span></div>
+      <div class="metrics">
+        <div class="card"><label>參考現價</label><div class="value" id="price">–</div><div class="hint">FinMind 最新日收盤價</div></div>
+        <div class="card"><label>最新現金股利</label><div class="value" id="dividend">–</div><div class="hint" id="issueYear">–</div></div>
+        <div class="card"><label>目前預估殖利率</label><div class="value" id="estimated">–</div><div class="hint">現金股利 ÷ 參考現價</div></div>
+        <div class="card"><label>近 5 年平均殖利率</label><div class="value" id="fiveYear">–</div><div class="hint">以全年平均收盤價計算</div></div>
+      </div>
+      <div class="history"><table><thead><tr><th>發放年</th><th>所屬年</th><th>現金股利</th><th>股票股利</th><th>除權息日</th><th>除息前年價</th><th>年均價現金殖利率</th></tr></thead><tbody id="history"></tbody></table></div>
+      <div class="source">資料來源：<a id="source" target="_blank" rel="noreferrer">FinMind</a>。殖利率為推估值，非保證收益，交易前請自行確認公告與價格。</div>
+    </section>
+  </main>
+  <script>
+    const fmt = (n, digits=2) => n == null ? '–' : Number(n).toFixed(digits);
+    const pct = n => n == null ? '–' : `${(Number(n) * 100).toFixed(1)}%`;
+    async function search() {
+      const code = document.querySelector('#code').value.trim();
+      const message = document.querySelector('#message');
+      const result = document.querySelector('#result');
+      message.textContent = '查詢中…'; result.style.display = 'none';
+      try {
+        const response = await fetch(`/api/stock?code=${encodeURIComponent(code)}`);
+        const data = await response.json(); if (!response.ok) throw new Error(data.error || '查詢失敗');
+        document.querySelector('#stockTitle').textContent = `${data.code} ${data.name}`;
+        const status = document.querySelector('#status'); status.textContent = data.offline ? '離線初始資料' : '已更新'; status.className = data.offline ? 'badge offline' : 'badge';
+        document.querySelector('#price').textContent = fmt(data.price);
+        document.querySelector('#dividend').textContent = fmt(data.cashDividend);
+        document.querySelector('#issueYear').textContent = `${data.issueYear} 年最新發放資料`;
+        document.querySelector('#estimated').textContent = pct(data.estimatedYield);
+        document.querySelector('#fiveYear').textContent = pct(data.fiveYearYield);
+        document.querySelector('#history').innerHTML = data.history.map(row => `<tr><td>${row.issueYear ?? '–'}</td><td>${row.fiscalYear ?? '–'}</td><td class="num">${fmt(row.cashDividend)}</td><td class="num">${fmt(row.stockDividend)}</td><td>${row.exDate || '–'}</td><td class="num">${fmt(row.beforeExPrice)}</td><td class="num">${row.averageCashYield == null ? '–' : `${Number(row.averageCashYield).toFixed(1)}%`}</td></tr>`).join('');
+        const source = document.querySelector('#source'); source.href = data.source || '#'; source.textContent = data.source || 'FinMind';
+        result.style.display = 'block'; message.textContent = '';
+      } catch (error) { message.textContent = error.message; }
+    }
+    document.querySelector('#search').addEventListener('submit', event => { event.preventDefault(); search(); }); search();
+  </script>
+</body>
+</html>
