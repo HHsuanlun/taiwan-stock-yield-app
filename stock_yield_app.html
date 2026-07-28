@@ -26,7 +26,7 @@
   <header><div class="shell top"><h1>台股殖利率比較</h1><span class="sub">現金股利／參考現價</span></div></header>
   <main>
     <section class="panel">
-      <form class="add" id="addForm"><input id="code" inputmode="numeric" maxlength="6" placeholder="輸入股票代號，例如 2891" aria-label="股票代號"><button>新增股票</button><span class="hint">最多 12 檔</span></form>
+      <form class="add" id="addForm"><input id="code" inputmode="numeric" maxlength="6" placeholder="輸入股票代號，例如 2891" aria-label="股票代號"><button>新增股票</button><button type="button" id="samButton">Sam</button><span class="hint">最多 20 檔</span></form>
       <div class="chips" id="chips"></div>
     </section>
     <div class="bar"><div><h2>殖利率比較</h2><div class="hint">依目前預估殖利率由高至低排列</div></div><div id="message"></div></div>
@@ -36,6 +36,7 @@
   </main>
   <script>
     const key = 'tw-yield-codes';
+    const samCodes = ['2880','2881','2882','2884','2885','2886','2887','2891','2892','5880','2883','2890','0050','0056'];
     let codes = JSON.parse(localStorage.getItem(key) || '["2891","5880","2880"]');
     const fmt = n => n == null ? '–' : Number(n).toFixed(2);
     const pct = n => n == null ? '–' : `${(Number(n) * 100).toFixed(1)}%`;
@@ -59,7 +60,8 @@
       try { const response = await fetch(`/api/stocks?codes=${codes.join(',')}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || '查詢失敗'); chart(data.stocks); table(data.stocks); message.textContent = data.errors.length ? `${data.errors.length} 檔無法取得資料` : `已更新 ${data.stocks.length} 檔`; }
       catch (error) { message.textContent = error.message; }
     }
-    document.querySelector('#addForm').addEventListener('submit', event => { event.preventDefault(); const input = document.querySelector('#code'); const code = input.value.trim(); if (!/^\d{4,6}$/.test(code)) { input.focus(); return; } if (!codes.includes(code) && codes.length < 12) { codes.push(code); save(); refresh(); } input.value = ''; });
+    document.querySelector('#addForm').addEventListener('submit', event => { event.preventDefault(); const input = document.querySelector('#code'); const code = input.value.trim(); if (!/^\d{4,6}$/.test(code)) { input.focus(); return; } if (!codes.includes(code) && codes.length < 20) { codes.push(code); save(); refresh(); } input.value = ''; });
+    document.querySelector('#samButton').addEventListener('click', () => { codes = [...new Set([...codes, ...samCodes])].slice(0, 20); save(); refresh(); });
     document.querySelector('#chips').addEventListener('click', event => { const code = event.target.dataset.code; if (code) { codes = codes.filter(item => item !== code); save(); refresh(); } });
     refresh();
   </script>

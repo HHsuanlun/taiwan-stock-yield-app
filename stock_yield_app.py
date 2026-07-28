@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -56,11 +57,15 @@ def query_stock(code: str) -> dict:
 def query_stocks(codes: list[str]) -> dict:
     """批次查詢並依目前預估殖利率由高至低排序。"""
     stocks, errors = [], []
-    for code in dict.fromkeys(codes):
-        try:
-            stocks.append(query_stock(code))
-        except ValueError as error:
-            errors.append({"code": code, "message": str(error)})
+    unique_codes = list(dict.fromkeys(codes))
+    with ThreadPoolExecutor(max_workers=min(6, len(unique_codes))) as pool:
+        futures = {pool.submit(query_stock, code): code for code in unique_codes}
+        for future in as_completed(futures):
+            code = futures[future]
+            try:
+                stocks.append(future.result())
+            except ValueError as error:
+                errors.append({"code": code, "message": str(error)})
     stocks.sort(key=lambda stock: stock["estimatedYield"] if stock["estimatedYield"] is not None else -1, reverse=True)
     return {"stocks": stocks, "errors": errors}
 
@@ -84,8 +89,8 @@ class AppHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/stocks":
             raw_codes = parse_qs(parsed.query).get("codes", [""])[0]
             codes = [code.strip() for code in raw_codes.split(",") if code.strip()]
-            if not codes or len(codes) > 12 or any(not code.isdigit() or not 4 <= len(code) <= 6 for code in codes):
-                self.send_json({"error": "請輸入 1 至 12 檔、每檔 4 至 6 碼的股票代號。"}, 400)
+            if not codes or len(codes) > 20 or any(not code.isdigit() or not 4 <= len(code) <= 6 for code in codes):
+                self.send_json({"error": "請輸入 1 至 20 檔、每檔 4 至 6 碼的股票代號。"}, 400)
                 return
             self.send_json(query_stocks(codes))
             return
