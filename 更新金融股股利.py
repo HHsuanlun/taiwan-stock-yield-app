@@ -103,6 +103,8 @@ def fetch_rows(stock_id: str, stock_name: str) -> list[dict]:
     dividends = api_data("TaiwanStockDividend")
     dividend_results = {item.get("date"): item for item in api_data("TaiwanStockDividendResult")}
     prices = api_data("TaiwanStockPrice")
+    stock_info = api_data("TaiwanStockInfo")
+    display_name = stock_info[0].get("stock_name") or stock_name
     latest_price = amount(prices[-1].get("close"))
     yearly_prices: dict[int, list[float]] = {}
     for price in prices:
@@ -132,7 +134,7 @@ def fetch_rows(stock_id: str, stock_name: str) -> list[dict]:
         before_price = amount(dividend_results.get(record["exDate"], {}).get("before_price")) or None
         annual_prices = [value for value in yearly_prices.get(issue_year, []) if value]
         average_price = sum(annual_prices) / len(annual_prices) if annual_prices else None
-        rows.append({"stockId": stock_id, "stockName": stock_name, "issueYear": issue_year, "fiscalYear": fiscal,
+        rows.append({"stockId": stock_id, "stockName": display_name, "issueYear": issue_year, "fiscalYear": fiscal,
                      "cashDividend": record["cash"], "stockDividend": record["stock"], "totalDividend": record["cash"] + record["stock"],
                      "exDate": record["exDate"], "beforeExPrice": before_price, "exCashYield": record["cash"] / before_price * 100 if before_price else None,
                      "averagePrice": average_price, "averageCashYield": record["cash"] / average_price * 100 if average_price else None,
