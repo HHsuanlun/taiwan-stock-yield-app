@@ -53,6 +53,18 @@ def query_stock(code: str) -> dict:
     return payload
 
 
+def query_stocks(codes: list[str]) -> dict:
+    """批次查詢並依目前預估殖利率由高至低排序。"""
+    stocks, errors = [], []
+    for code in dict.fromkeys(codes):
+        try:
+            stocks.append(query_stock(code))
+        except ValueError as error:
+            errors.append({"code": code, "message": str(error)})
+    stocks.sort(key=lambda stock: stock["estimatedYield"] if stock["estimatedYield"] is not None else -1, reverse=True)
+    return {"stocks": stocks, "errors": errors}
+
+
 class AppHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -68,6 +80,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json(query_stock(code))
             except ValueError as error:
                 self.send_json({"error": str(error)}, 502)
+            return
+        if parsed.path == "/api/stocks":
+            raw_codes = parse_qs(parsed.query).get("codes", [""])[0]
+            codes = [code.strip() for code in raw_codes.split(",") if code.strip()]
+            if not codes or len(codes) > 12 or any(not code.isdigit() or not 4 <= len(code) <= 6 for code in codes):
+                self.send_json({"error": "請輸入 1 至 12 檔、每檔 4 至 6 碼的股票代號。"}, 400)
+                return
+            self.send_json(query_stocks(codes))
             return
         if parsed.path in {"/", "/index.html"}:
             self.path = "/stock_yield_app.html"
