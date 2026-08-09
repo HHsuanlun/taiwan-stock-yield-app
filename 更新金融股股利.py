@@ -30,6 +30,17 @@ FALLBACK = {
     "5880": [[2026,2025,0.8,0.25,25.15,23.6,25.15],[2025,2024,0.7,0.3,25.95,24.4,24.3],[2024,2023,0.65,0.35,26.45,25.8,24.3],[2023,2022,0.5,0.5,29.35,26.8,26.7],[2022,2021,1,0.3,28.5,26.9,26],[2021,2020,0.85,0.2,22.15,21.7,25.45],[2020,2019,0.85,0.3,21.85,20.2,20.35],[2019,2018,0.75,0.3,20.7,20.1,20.75],[2018,2017,0.75,0.3,18.9,17.7,17.65],[2017,2016,0.75,0.3,16.45,15.7,16.6],[2016,2015,0.3,0.7,15.15,14.1,14.05],[2015,2014,0.5,0.5,15.65,15.3,13.75],[2014,2013,0.5,0.5,17.45,16.5,16.3],[2013,2012,0.4,0.6,16.95,16.6,16.3],[2012,2011,0.5,0.5,18.3,17.2,16.35]],
 }
 
+# 外部 API 偶有漏列單次 ETF 配息；此表只放入已由基金公司／公開年度紀錄核對的年度總額。
+# 0056 於 2025 年共配發 1.07 + 1.07 + 0.866 + 0.866 = 3.872 元，
+# 但 FinMind 的 2025-01-17 記錄會回傳 0，導致直接加總少算 1.07 元。
+ANNUAL_DIVIDEND_OVERRIDES = {
+    ("0056", 2025): {
+        "cash": 3.872,
+        "stock": 0.0,
+        "note": "年度配息校正：0056 於 2025 年合計現金股利 3.872 元。",
+    },
+}
+
 
 def clean_html(value: str) -> str:
     value = re.sub(r"<br\s*/?\s*>", " ", value, flags=re.I)
@@ -77,6 +88,14 @@ def dividend_metrics(price: float | None, cash_dividend: float | None, stock_div
     }
 
 
+def corrected_dividends(stock_id: str, issue_year: int, cash_dividend: float, stock_dividend: float) -> tuple[float, float, str]:
+    """回傳經人工核對的年度配息；沒有校正資料時保留 API 原值。"""
+    correction = ANNUAL_DIVIDEND_OVERRIDES.get((stock_id, issue_year))
+    if not correction:
+        return cash_dividend, stock_dividend, ""
+    return correction["cash"], correction["stock"], correction["note"]
+
+
 def decode_page(raw: bytes, content_type: str) -> str:
     """依 HTTP / HTML 宣告解碼，避免 UTF-8 / Big5 造成表格名稱找不到。"""
     candidates = re.findall(r"charset=([\w-]+)", content_type, flags=re.I)
@@ -102,16 +121,17 @@ def parse_rows(page: str, stock_id: str, stock_name: str) -> list[dict]:
         cells = [clean_html(cell) for cell in re.findall(r"<t[dh]\b[^>]*>([\s\S]*?)</t[dh]>", tr, flags=re.I)]
         if len(cells) < 22 or not re.fullmatch(r"20\d{2}", cells[0]):
             continue
-        current_metrics = dividend_metrics(number(cells[16]), number(cells[4]), number(cells[7]))
-        average_metrics = dividend_metrics(number(cells[14]), number(cells[4]), number(cells[7]))
+        cash, stock, data_note = corrected_dividends(stock_id, int(cells[0]), number(cells[4]) or 0, number(cells[7]) or 0)
+        current_metrics = dividend_metrics(number(cells[16]), cash, stock)
+        average_metrics = dividend_metrics(number(cells[14]), cash, stock)
         rows.append({"stockId": stock_id, "stockName": stock_name, "issueYear": int(cells[0]), "fiscalYear": int(cells[1]),
-                     "cashDividend": number(cells[4]), "stockDividend": number(cells[7]), "totalDividend": number(cells[8]),
+                     "cashDividend": cash, "stockDividend": stock, "totalDividend": cash + stock,
                      "exDate": cells[11], "beforeExPrice": number(cells[12]), "exCashYield": number(cells[13]),
                      "averagePrice": number(cells[14]), "averageCashYield": number(cells[15]), "currentPrice": number(cells[16]),
                      "currentCashYield": number(cells[17]), "currentTotalDividendYield": current_metrics["totalDividendYield"],
                      "averageTotalDividendYield": average_metrics["totalDividendYield"], "stockRatio": current_metrics["stockRatio"],
                      "exRightPrice": current_metrics["exRightPrice"], "stockDividendValue": current_metrics["stockDividendValue"],
-                     "totalDividendValue": current_metrics["totalDividendValue"], "sourceUrl": f"{SOURCE_BASE}{stock_id}"})
+                     "totalDividendValue": current_metrics["totalDividendValue"], "dataNote": data_note, "sourceUrl": f"{SOURCE_BASE}{stock_id}"})
     if not rows:
         raise ValueError("未找到可辨識的年度資料列")
     return rows
@@ -148,7 +168,9 @@ def fetch_rows(stock_id: str, stock_name: str) -> list[dict]:
         except (KeyError, TypeError, ValueError):
             continue
 
-    grouped: dict[tuple[int, int], dict] = {}
+    # 殖利率比較以「實際發放年」為單位。季配 ETF 的同一年配息可能被 API
+    # 標記為不同所屬年度，若以 (發放年, 所屬年) 分組會產生重複年度列。
+    grouped: dict[int, dict] = {}
     for dividend in dividends:
         ex_date = dividend.get("CashExDividendTradingDate") or dividend.get("StockExDividendTradingDate") or dividend.get("date")
         if not isinstance(ex_date, str) or len(ex_date) < 4:
@@ -157,28 +179,30 @@ def fetch_rows(stock_id: str, stock_name: str) -> list[dict]:
         year_text = str(dividend.get("year", ""))
         match = re.search(r"\d+", year_text)
         fiscal = int(match.group()) + 1911 if match and int(match.group()) < 1911 else (int(match.group()) if match else issue_year - 1)
-        record = grouped.setdefault((issue_year, fiscal), {"cash": 0.0, "stock": 0.0, "exDate": ex_date})
+        record = grouped.setdefault(issue_year, {"cash": 0.0, "stock": 0.0, "exDate": ex_date, "fiscalYear": fiscal})
         record["cash"] += amount(dividend.get("CashEarningsDistribution")) + amount(dividend.get("CashStatutorySurplus"))
         record["stock"] += amount(dividend.get("StockEarningsDistribution")) + amount(dividend.get("StockStatutorySurplus"))
         record["exDate"] = max(record["exDate"], ex_date)
+        record["fiscalYear"] = max(record["fiscalYear"], fiscal)
 
     rows: list[dict] = []
-    for (issue_year, fiscal), record in grouped.items():
-        if record["cash"] == 0 and record["stock"] == 0:
+    for issue_year, record in grouped.items():
+        cash, stock, data_note = corrected_dividends(stock_id, issue_year, record["cash"], record["stock"])
+        if cash == 0 and stock == 0:
             continue
         before_price = amount(dividend_results.get(record["exDate"], {}).get("before_price")) or None
         annual_prices = [value for value in yearly_prices.get(issue_year, []) if value]
         average_price = sum(annual_prices) / len(annual_prices) if annual_prices else None
-        current_metrics = dividend_metrics(latest_price or None, record["cash"], record["stock"])
-        average_metrics = dividend_metrics(average_price, record["cash"], record["stock"])
-        rows.append({"stockId": stock_id, "stockName": display_name, "issueYear": issue_year, "fiscalYear": fiscal,
-                     "cashDividend": record["cash"], "stockDividend": record["stock"], "totalDividend": record["cash"] + record["stock"],
-                     "exDate": record["exDate"], "beforeExPrice": before_price, "exCashYield": record["cash"] / before_price * 100 if before_price else None,
-                     "averagePrice": average_price, "averageCashYield": record["cash"] / average_price * 100 if average_price else None,
-                     "currentPrice": latest_price or None, "currentCashYield": record["cash"] / latest_price * 100 if latest_price else None,
+        current_metrics = dividend_metrics(latest_price or None, cash, stock)
+        average_metrics = dividend_metrics(average_price, cash, stock)
+        rows.append({"stockId": stock_id, "stockName": display_name, "issueYear": issue_year, "fiscalYear": record["fiscalYear"],
+                     "cashDividend": cash, "stockDividend": stock, "totalDividend": cash + stock,
+                     "exDate": record["exDate"], "beforeExPrice": before_price, "exCashYield": cash / before_price * 100 if before_price else None,
+                     "averagePrice": average_price, "averageCashYield": cash / average_price * 100 if average_price else None,
+                     "currentPrice": latest_price or None, "currentCashYield": cash / latest_price * 100 if latest_price else None,
                      "currentTotalDividendYield": current_metrics["totalDividendYield"], "averageTotalDividendYield": average_metrics["totalDividendYield"],
                      "stockRatio": current_metrics["stockRatio"], "exRightPrice": current_metrics["exRightPrice"],
-                     "stockDividendValue": current_metrics["stockDividendValue"], "totalDividendValue": current_metrics["totalDividendValue"],
+                     "stockDividendValue": current_metrics["stockDividendValue"], "totalDividendValue": current_metrics["totalDividendValue"], "dataNote": data_note,
                      "sourceUrl": FINMIND_SOURCE})
     if not rows:
         raise ValueError("FinMind 沒有可用股利資料")
@@ -187,6 +211,7 @@ def fetch_rows(stock_id: str, stock_name: str) -> list[dict]:
 def fallback_rows(stock_id: str, stock_name: str) -> list[dict]:
     result = []
     for issue, fiscal, cash, stock, before, average, current in FALLBACK.get(stock_id, []):
+        cash, stock, data_note = corrected_dividends(stock_id, issue, cash, stock)
         current_metrics = dividend_metrics(current, cash, stock)
         average_metrics = dividend_metrics(average, cash, stock)
         result.append({"stockId": stock_id, "stockName": stock_name, "issueYear": issue, "fiscalYear": fiscal,
@@ -195,7 +220,7 @@ def fallback_rows(stock_id: str, stock_name: str) -> list[dict]:
                        "averageCashYield": cash / average * 100, "currentPrice": current, "currentCashYield": cash / current * 100,
                        "currentTotalDividendYield": current_metrics["totalDividendYield"], "averageTotalDividendYield": average_metrics["totalDividendYield"],
                        "stockRatio": current_metrics["stockRatio"], "exRightPrice": current_metrics["exRightPrice"],
-                       "stockDividendValue": current_metrics["stockDividendValue"], "totalDividendValue": current_metrics["totalDividendValue"],
+                       "stockDividendValue": current_metrics["stockDividendValue"], "totalDividendValue": current_metrics["totalDividendValue"], "dataNote": data_note,
                        "sourceUrl": f"{SOURCE_BASE}{stock_id}"})
     return result
 
@@ -250,7 +275,7 @@ def create_workbook(rows: list[dict], offline: set[str]) -> None:
     history_headers = ["代號", "公司", "股利發放年度", "股利所屬年度", "現金股利", "股票股利", "股利合計", "除權息日", "除息前年價", "除息現金殖利率", "全年平均價", "參考現價", "目前總殖利率", "年均價總殖利率", "資料來源", "備註"]
     history = [[(header, 2) for header in history_headers]]
     for item in rows:
-        history.append([(item["stockId"], 6), (item["stockName"], 6), (item["issueYear"], 6), (item["fiscalYear"], 6), (item["cashDividend"], 3), (item["stockDividend"], 3), (item["totalDividend"], 3), (item["exDate"], 6), (item["beforeExPrice"], 3), (item["exCashYield"] / 100 if item["exCashYield"] is not None else None, 4), (item["averagePrice"], 3), (item["currentPrice"], 3), (item["currentTotalDividendYield"] / 100 if item["currentTotalDividendYield"] is not None else None, 4), (item["averageTotalDividendYield"] / 100 if item["averageTotalDividendYield"] is not None else None, 4), (item["sourceUrl"], 6), ("", 6)])
+        history.append([(item["stockId"], 6), (item["stockName"], 6), (item["issueYear"], 6), (item["fiscalYear"], 6), (item["cashDividend"], 3), (item["stockDividend"], 3), (item["totalDividend"], 3), (item["exDate"], 6), (item["beforeExPrice"], 3), (item["exCashYield"] / 100 if item["exCashYield"] is not None else None, 4), (item["averagePrice"], 3), (item["currentPrice"], 3), (item["currentTotalDividendYield"] / 100 if item["currentTotalDividendYield"] is not None else None, 4), (item["averageTotalDividendYield"] / 100 if item["averageTotalDividendYield"] is not None else None, 4), (item["sourceUrl"], 6), (item.get("dataNote", ""), 6)])
     source = [[("資料來源與使用說明", 1)] + [(None, 0)] * 3, [(None, 0)] * 4, [(x, 2) for x in ["項目", "內容", "來源", "備註"]],
               [("歷年股利／歷史殖利率", 6), ("FinMind 股利政策、除權息結果與每日收盤價 API", 6), (FINMIND_SOURCE, 6), ("股利發放年度依除權息日認定。", 6)],
               [("參考現價", 6), ("FinMind 每日收盤價資料中的最新 close", 6), (FINMIND_SOURCE, 6), ("非即時報價；交易前請另行確認。", 6)],
