@@ -181,9 +181,13 @@ def fetch_rows(stock_id: str, stock_name: str) -> list[dict]:
         year_text = str(dividend.get("year", ""))
         match = re.search(r"\d+", year_text)
         fiscal = int(match.group()) + 1911 if match and int(match.group()) < 1911 else (int(match.group()) if match else issue_year - 1)
-        record = grouped.setdefault(issue_year, {"cash": 0.0, "stock": 0.0, "exDate": ex_date, "fiscalYear": fiscal})
-        record["cash"] += amount(dividend.get("CashEarningsDistribution")) + amount(dividend.get("CashStatutorySurplus"))
-        record["stock"] += amount(dividend.get("StockEarningsDistribution")) + amount(dividend.get("StockStatutorySurplus"))
+        record = grouped.setdefault(issue_year, {"cash": 0.0, "stock": 0.0, "exDate": ex_date, "fiscalYear": fiscal, "needsYahooCheck": False})
+        cash_part = amount(dividend.get("CashEarningsDistribution")) + amount(dividend.get("CashStatutorySurplus"))
+        stock_part = amount(dividend.get("StockEarningsDistribution")) + amount(dividend.get("StockStatutorySurplus"))
+        record["cash"] += cash_part
+        record["stock"] += stock_part
+        if (dividend.get("CashExDividendTradingDate") or dividend.get("StockExDividendTradingDate")) and cash_part == 0 and stock_part == 0:
+            record["needsYahooCheck"] = True
         record["exDate"] = max(record["exDate"], ex_date)
         record["fiscalYear"] = max(record["fiscalYear"], fiscal)
 
@@ -205,7 +209,7 @@ def fetch_rows(stock_id: str, stock_name: str) -> list[dict]:
                      "currentTotalDividendYield": current_metrics["totalDividendYield"], "averageTotalDividendYield": average_metrics["totalDividendYield"],
                      "stockRatio": current_metrics["stockRatio"], "exRightPrice": current_metrics["exRightPrice"],
                      "stockDividendValue": current_metrics["stockDividendValue"], "totalDividendValue": current_metrics["totalDividendValue"], "dataNote": data_note,
-                     "sourceUrl": FINMIND_SOURCE})
+                     "dataNeedsYahooCheck": record["needsYahooCheck"], "sourceUrl": FINMIND_SOURCE})
     if not rows:
         raise ValueError("FinMind 沒有可用股利資料")
     return rows
@@ -266,7 +270,8 @@ def fetch_yahoo_rows(stock_id: str, stock_name: str) -> list[dict]:
                      "currentTotalDividendYield": current_metrics["totalDividendYield"], "averageTotalDividendYield": average_metrics["totalDividendYield"],
                      "stockRatio": current_metrics["stockRatio"], "exRightPrice": current_metrics["exRightPrice"],
                      "stockDividendValue": current_metrics["stockDividendValue"], "totalDividendValue": current_metrics["totalDividendValue"],
-                     "dataNote": data_note or "Yahoo Finance 備援資料：僅含現金股利。", "sourceUrl": f"{YAHOO_SOURCE}quote/{symbol}/"})
+                     "dataNote": data_note or "Yahoo Finance 備援資料：僅含現金股利。", "dataNeedsYahooCheck": False,
+                     "sourceUrl": f"{YAHOO_SOURCE}quote/{symbol}/"})
     if not rows:
         raise ValueError("Yahoo Finance 沒有可用配息資料")
     return rows
@@ -284,7 +289,7 @@ def fallback_rows(stock_id: str, stock_name: str) -> list[dict]:
                        "currentTotalDividendYield": current_metrics["totalDividendYield"], "averageTotalDividendYield": average_metrics["totalDividendYield"],
                        "stockRatio": current_metrics["stockRatio"], "exRightPrice": current_metrics["exRightPrice"],
                        "stockDividendValue": current_metrics["stockDividendValue"], "totalDividendValue": current_metrics["totalDividendValue"], "dataNote": data_note,
-                       "sourceUrl": f"{SOURCE_BASE}{stock_id}"})
+                       "dataNeedsYahooCheck": False, "sourceUrl": f"{SOURCE_BASE}{stock_id}"})
     return result
 
 
