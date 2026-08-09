@@ -22,6 +22,8 @@ OUTPUT = ROOT / "outputs" / "financial_dividend" / "台灣金融股_股利殖利
 SOURCE_BASE = "https://goodinfo.tw/tw/StockDividendPolicy.asp?STOCK_ID="  # 僅保留供舊離線資料註記
 FINMIND_API = "https://api.finmindtrade.com/api/v4/data"
 FINMIND_SOURCE = "https://finmind.github.io/tutor/TaiwanMarket/Fundamental/"
+YAHOO_CHART_API = "https://query1.finance.yahoo.com/v8/finance/chart/"
+YAHOO_SOURCE = "https://finance.yahoo.com/"
 STOCKS = (("2891", "中信金"), ("5880", "合庫金"), ("2880", "華南金"))
 
 # 欄位：發放年、所屬年、現金股利、股票股利、除息前年價、年均價、參考現價。
@@ -206,6 +208,67 @@ def fetch_rows(stock_id: str, stock_name: str) -> list[dict]:
                      "sourceUrl": FINMIND_SOURCE})
     if not rows:
         raise ValueError("FinMind 沒有可用股利資料")
+    return rows
+
+
+def fetch_yahoo_rows(stock_id: str, stock_name: str) -> list[dict]:
+    """FinMind 無法使用時，以 Yahoo Finance 的公開行情與現金配息作為備援。"""
+    end_timestamp = int(time.time())
+    start_timestamp = int(datetime(2005, 1, 1).timestamp())
+    last_error: Exception | None = None
+    for suffix in (".TW", ".TWO"):
+        symbol = f"{stock_id}{suffix}"
+        query = urlencode({"period1": start_timestamp, "period2": end_timestamp, "interval": "1d", "events": "div"})
+        request = Request(f"{YAHOO_CHART_API}{symbol}?{query}", headers={"User-Agent": "Mozilla/5.0"})
+        try:
+            with urlopen(request, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            result = payload.get("chart", {}).get("result", [None])[0]
+            if not result:
+                raise ValueError(payload.get("chart", {}).get("error", {}).get("description", "Yahoo Finance 沒有回傳資料"))
+            break
+        except Exception as error:
+            last_error = error
+    else:
+        raise ValueError(f"Yahoo Finance 無法取得 {stock_id} 的資料：{last_error}")
+
+    meta = result.get("meta", {})
+    timestamps = result.get("timestamp") or []
+    closes = result.get("indicators", {}).get("quote", [{}])[0].get("close") or []
+    yearly_prices: dict[int, list[float]] = {}
+    for timestamp, close in zip(timestamps, closes):
+        if close is None:
+            continue
+        year = datetime.fromtimestamp(timestamp).year
+        yearly_prices.setdefault(year, []).append(float(close))
+    latest_price = meta.get("regularMarketPrice") or next((float(close) for close in reversed(closes) if close is not None), None)
+    dividends: dict[int, float] = {}
+    for event in (result.get("events", {}).get("dividends") or {}).values():
+        timestamp, amount = event.get("date"), event.get("amount")
+        if timestamp is None or amount is None:
+            continue
+        year = datetime.fromtimestamp(timestamp).year
+        dividends[year] = dividends.get(year, 0.0) + float(amount)
+
+    display_name = stock_name if stock_name != stock_id else (meta.get("shortName") or meta.get("longName") or stock_name)
+    rows: list[dict] = []
+    for issue_year, reported_cash in dividends.items():
+        cash, stock, data_note = corrected_dividends(stock_id, issue_year, reported_cash, 0.0)
+        average_price_values = yearly_prices.get(issue_year, [])
+        average_price = sum(average_price_values) / len(average_price_values) if average_price_values else None
+        current_metrics = dividend_metrics(latest_price, cash, stock)
+        average_metrics = dividend_metrics(average_price, cash, stock)
+        rows.append({"stockId": stock_id, "stockName": display_name, "issueYear": issue_year, "fiscalYear": issue_year,
+                     "cashDividend": cash, "stockDividend": stock, "totalDividend": cash + stock, "exDate": "",
+                     "beforeExPrice": None, "exCashYield": None, "averagePrice": average_price,
+                     "averageCashYield": cash / average_price * 100 if average_price else None,
+                     "currentPrice": latest_price, "currentCashYield": cash / latest_price * 100 if latest_price else None,
+                     "currentTotalDividendYield": current_metrics["totalDividendYield"], "averageTotalDividendYield": average_metrics["totalDividendYield"],
+                     "stockRatio": current_metrics["stockRatio"], "exRightPrice": current_metrics["exRightPrice"],
+                     "stockDividendValue": current_metrics["stockDividendValue"], "totalDividendValue": current_metrics["totalDividendValue"],
+                     "dataNote": data_note or "Yahoo Finance 備援資料：僅含現金股利。", "sourceUrl": f"{YAHOO_SOURCE}quote/{symbol}/"})
+    if not rows:
+        raise ValueError("Yahoo Finance 沒有可用配息資料")
     return rows
     
 def fallback_rows(stock_id: str, stock_name: str) -> list[dict]:

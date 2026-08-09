@@ -15,7 +15,12 @@ from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parent
 DATA = importlib.import_module("更新金融股股利")
-STOCK_NAMES = {"2891": "中信金", "5880": "合庫金", "2880": "華南金"}
+STOCK_NAMES = {
+    "2880": "華南金", "2881": "富邦金", "2882": "國泰金", "2883": "凱基金",
+    "2884": "玉山金", "2885": "元大金", "2886": "兆豐金", "2887": "台新新光金",
+    "2890": "永豐金", "2891": "中信金", "2892": "第一金", "5880": "合庫金",
+    "0050": "元大台灣50", "0056": "元大高股息",
+}
 CACHE: dict[str, tuple[float, dict]] = {}
 
 
@@ -28,13 +33,18 @@ def query_stock(code: str) -> dict:
         return cached[1]
     name = STOCK_NAMES.get(code, code)
     offline = False
+    source_fallback = False
     try:
         rows = DATA.fetch_rows(code, name)
-    except Exception as error:
-        rows = DATA.fallback_rows(code, name)
-        offline = True
-        if not rows:
-            raise ValueError(f"無法取得 {code} 的資料：{error}") from error
+    except Exception as finmind_error:
+        try:
+            rows = DATA.fetch_yahoo_rows(code, name)
+            source_fallback = True
+        except Exception as yahoo_error:
+            rows = DATA.fallback_rows(code, name)
+            offline = True
+            if not rows:
+                raise ValueError(f"無法取得 {code} 的資料：FinMind：{finmind_error}；Yahoo Finance：{yahoo_error}") from yahoo_error
     rows.sort(key=lambda row: row["issueYear"], reverse=True)
     latest = rows[0]
     annual_yields = [row["averageTotalDividendYield"] / 100 for row in rows if row.get("averageTotalDividendYield") is not None and row["issueYear"] >= latest["issueYear"] - 4]
@@ -54,6 +64,7 @@ def query_stock(code: str) -> dict:
         "fiveYearYield": sum(annual_yields) / len(annual_yields) if annual_yields else None,
         "fiveYearCashYield": sum(annual_cash_yields) / len(annual_cash_yields) if annual_cash_yields else None,
         "offline": offline,
+        "sourceFallback": source_fallback,
         "source": latest.get("sourceUrl"),
         "history": rows[:15],
     }

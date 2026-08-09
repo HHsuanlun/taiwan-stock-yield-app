@@ -32,7 +32,7 @@
     <div class="bar"><div><h2>殖利率比較</h2><div class="hint" id="comparisonHint"></div></div><div class="bar-actions"><button type="button" class="toggle" id="stockToggle" aria-pressed="true"></button><div id="message"></div></div></div>
     <section class="panel chart" id="chart" aria-label="預估殖利率比較圖"></section>
     <div class="tablebox" id="tablebox"></div>
-    <footer>預估總殖利率 =〔現金股利＋除權價 × 配股比例〕÷ 參考現價；除權價 =（參考現價－現金股利）÷（1＋配股比例）。股票股利 0.25 代表每 1,000 股配發 25 股（配股比例 2.5%）。資料來自 FinMind API，僅供資訊參考，不代表保證收益或投資建議。</footer>
+    <footer>預估總殖利率 =〔現金股利＋除權價 × 配股比例〕÷ 參考現價；除權價 =（參考現價－現金股利）÷（1＋配股比例）。股票股利 0.25 代表每 1,000 股配發 25 股（配股比例 2.5%）。資料優先來自 FinMind API；顯示「Yahoo 備援」時僅含現金股利。僅供資訊參考，不代表保證收益或投資建議。</footer>
   </main>
   <script>
     const key = 'tw-yield-codes';
@@ -51,7 +51,7 @@
     function table(stocks) {
       if (!stocks.length) { document.querySelector('#tablebox').innerHTML = '<div class="panel empty">請先新增股票代號。</div>'; return; }
       const yieldLabel = includeStock ? '目前預估總殖利率' : '目前預估現金殖利率';
-      document.querySelector('#tablebox').innerHTML = `<table><thead><tr><th>#</th><th>公司</th><th class="num">參考現價</th><th class="num">現金股利</th><th class="num">股票股利</th><th class="num">${yieldLabel}</th><th class="num">近 5 年平均</th><th>資料狀態</th></tr></thead><tbody>${stocks.map((stock, index) => `<tr><td>${index + 1}</td><td class="company">${stock.name}<span class="code">${stock.code}｜${stock.issueYear} 年發放</span></td><td class="num">${fmt(stock.price)}</td><td class="num">${fmt(stock.cashDividend)}</td><td class="num">${fmt(stock.stockDividend)}</td><td class="num yield">${pct(selectedYield(stock))}</td><td class="num">${pct(selectedFiveYearYield(stock))}</td><td><span class="status ${stock.offline ? 'offline' : ''}">${stock.offline ? '離線初始資料' : '已更新'}</span></td></tr>`).join('')}</tbody></table>`;
+      document.querySelector('#tablebox').innerHTML = `<table><thead><tr><th>#</th><th>公司</th><th class="num">參考現價</th><th class="num">現金股利</th><th class="num">股票股利</th><th class="num">${yieldLabel}</th><th class="num">近 5 年平均</th><th>資料狀態</th></tr></thead><tbody>${stocks.map((stock, index) => `<tr><td>${index + 1}</td><td class="company">${stock.name}<span class="code">${stock.code}｜${stock.issueYear} 年發放</span></td><td class="num">${fmt(stock.price)}</td><td class="num">${fmt(stock.cashDividend)}</td><td class="num">${fmt(stock.stockDividend)}</td><td class="num yield">${pct(selectedYield(stock))}</td><td class="num">${pct(selectedFiveYearYield(stock))}</td><td><span class="status ${stock.offline ? 'offline' : ''}">${stock.offline ? '離線初始資料' : stock.sourceFallback ? 'Yahoo 備援' : '已更新'}</span></td></tr>`).join('')}</tbody></table>`;
     }
     function chart(stocks) {
       const target = document.querySelector('#chart');
