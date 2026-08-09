@@ -38,6 +38,7 @@ def query_stock(code: str) -> dict:
     rows.sort(key=lambda row: row["issueYear"], reverse=True)
     latest = rows[0]
     annual_yields = [row["averageTotalDividendYield"] / 100 for row in rows if row.get("averageTotalDividendYield") is not None and row["issueYear"] >= latest["issueYear"] - 4]
+    annual_cash_yields = [row["averageCashYield"] / 100 for row in rows if row.get("averageCashYield") is not None and row["issueYear"] >= latest["issueYear"] - 4]
     payload = {
         "code": code,
         "name": latest.get("stockName", name),
@@ -49,7 +50,9 @@ def query_stock(code: str) -> dict:
         "totalDividendValue": latest.get("totalDividendValue"),
         "issueYear": latest.get("issueYear"),
         "estimatedYield": latest.get("currentTotalDividendYield", 0) / 100 if latest.get("currentTotalDividendYield") is not None else None,
+        "cashEstimatedYield": latest["cashDividend"] / latest["currentPrice"] if latest.get("currentPrice") else None,
         "fiveYearYield": sum(annual_yields) / len(annual_yields) if annual_yields else None,
+        "fiveYearCashYield": sum(annual_cash_yields) / len(annual_cash_yields) if annual_cash_yields else None,
         "offline": offline,
         "source": latest.get("sourceUrl"),
         "history": rows[:15],

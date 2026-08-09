@@ -13,7 +13,7 @@
     input { width:230px; max-width:100%; padding:10px 12px; border:1px solid #b8c7d8; border-radius:6px; font:inherit; } button { padding:10px 15px; border:0; border-radius:6px; color:#fff; background:var(--blue); font:inherit; cursor:pointer; }
     button:hover { background:var(--navy); } button.remove { color:#64748b; background:transparent; padding:4px 7px; font-size:19px; line-height:1; } .hint { color:var(--muted); font-size:13px; }
     .chips { display:flex; flex-wrap:wrap; gap:7px; padding:0 16px 16px; } .chip { display:flex; gap:6px; align-items:center; padding:5px 8px 5px 10px; color:#405468; background:#eef3f8; border-radius:20px; font-size:13px; }
-    .bar { display:flex; justify-content:space-between; align-items:end; margin:28px 0 10px; } h2 { margin:0; font-size:18px; } #message { min-height:22px; color:var(--muted); font-size:13px; }
+    .bar { display:flex; justify-content:space-between; align-items:end; margin:28px 0 10px; } h2 { margin:0; font-size:18px; } #message { min-height:22px; color:var(--muted); font-size:13px; } .bar-actions { display:flex; align-items:center; gap:12px; } .toggle { padding:7px 10px; border:1px solid #b8c7d8; color:#52677b; background:#fff; font-size:13px; } .toggle.active { border-color:#1f4e78; color:#fff; background:#1f4e78; }
     .tablebox { overflow:auto; } table { width:100%; border-collapse:separate; border-spacing:0; min-width:780px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
     th { padding:12px 14px; background:#edf3f9; color:#44576b; font-size:13px; font-weight:600; text-align:left; border-bottom:1px solid var(--line); } td { padding:14px; border-bottom:1px solid var(--line); vertical-align:middle; } tbody tr:last-child td { border-bottom:0; } tbody tr:hover { background:#fbfdff; }
     .num { text-align:right; font-variant-numeric:tabular-nums; } .company { font-weight:700; } .code { display:block; margin-top:2px; color:var(--muted); font-size:12px; font-weight:400; } .yield { color:var(--green); font-weight:800; font-size:17px; }
@@ -29,39 +29,48 @@
       <form class="add" id="addForm"><input id="code" inputmode="numeric" maxlength="6" placeholder="輸入股票代號，例如 2891" aria-label="股票代號"><button>新增股票</button><button type="button" id="samButton">Sam</button><span class="hint">最多 20 檔</span></form>
       <div class="chips" id="chips"></div>
     </section>
-    <div class="bar"><div><h2>殖利率比較</h2><div class="hint">依目前預估總殖利率（含配股）由高至低排列</div></div><div id="message"></div></div>
+    <div class="bar"><div><h2>殖利率比較</h2><div class="hint" id="comparisonHint"></div></div><div class="bar-actions"><button type="button" class="toggle" id="stockToggle" aria-pressed="true"></button><div id="message"></div></div></div>
     <section class="panel chart" id="chart" aria-label="預估殖利率比較圖"></section>
     <div class="tablebox" id="tablebox"></div>
     <footer>預估總殖利率 =〔現金股利＋除權價 × 配股比例〕÷ 參考現價；除權價 =（參考現價－現金股利）÷（1＋配股比例）。股票股利 0.25 代表每 1,000 股配發 25 股（配股比例 2.5%）。資料來自 FinMind API，僅供資訊參考，不代表保證收益或投資建議。</footer>
   </main>
   <script>
     const key = 'tw-yield-codes';
+    const stockToggleKey = 'tw-yield-include-stock';
     const samCodes = ['2880','2881','2882','2884','2885','2886','2887','2891','2892','5880','2883','2890','0050','0056'];
     let codes = JSON.parse(localStorage.getItem(key) || '["2891","5880","2880"]');
+    let includeStock = JSON.parse(localStorage.getItem(stockToggleKey) || 'true');
     const fmt = n => n == null ? '–' : Number(n).toFixed(2);
     const pct = n => n == null ? '–' : `${(Number(n) * 100).toFixed(1)}%`;
     function save() { localStorage.setItem(key, JSON.stringify(codes)); }
+    function selectedYield(stock) { return includeStock ? stock.estimatedYield : stock.cashEstimatedYield; }
+    function selectedFiveYearYield(stock) { return includeStock ? stock.fiveYearYield : stock.fiveYearCashYield; }
+    function ordered(stocks) { return [...stocks].sort((a, b) => (Number(selectedYield(b)) || -1) - (Number(selectedYield(a)) || -1)); }
+    function updateToggle() { const button = document.querySelector('#stockToggle'); button.textContent = includeStock ? '配股：計入' : '配股：不計'; button.classList.toggle('active', includeStock); button.setAttribute('aria-pressed', String(includeStock)); document.querySelector('#comparisonHint').textContent = includeStock ? '依目前預估總殖利率（含配股）由高至低排列' : '依目前預估現金殖利率由高至低排列'; }
     function chips() { document.querySelector('#chips').innerHTML = codes.map(code => `<span class="chip">${code}<button class="remove" aria-label="移除 ${code}" data-code="${code}">×</button></span>`).join(''); }
     function table(stocks) {
       if (!stocks.length) { document.querySelector('#tablebox').innerHTML = '<div class="panel empty">請先新增股票代號。</div>'; return; }
-      document.querySelector('#tablebox').innerHTML = `<table><thead><tr><th>#</th><th>公司</th><th class="num">參考現價</th><th class="num">現金股利</th><th class="num">股票股利</th><th class="num">目前預估總殖利率</th><th class="num">近 5 年平均</th><th>資料狀態</th></tr></thead><tbody>${stocks.map((stock, index) => `<tr><td>${index + 1}</td><td class="company">${stock.name}<span class="code">${stock.code}｜${stock.issueYear} 年發放</span></td><td class="num">${fmt(stock.price)}</td><td class="num">${fmt(stock.cashDividend)}</td><td class="num">${fmt(stock.stockDividend)}</td><td class="num yield">${pct(stock.estimatedYield)}</td><td class="num">${pct(stock.fiveYearYield)}</td><td><span class="status ${stock.offline ? 'offline' : ''}">${stock.offline ? '離線初始資料' : '已更新'}</span></td></tr>`).join('')}</tbody></table>`;
+      const yieldLabel = includeStock ? '目前預估總殖利率' : '目前預估現金殖利率';
+      document.querySelector('#tablebox').innerHTML = `<table><thead><tr><th>#</th><th>公司</th><th class="num">參考現價</th><th class="num">現金股利</th><th class="num">股票股利</th><th class="num">${yieldLabel}</th><th class="num">近 5 年平均</th><th>資料狀態</th></tr></thead><tbody>${stocks.map((stock, index) => `<tr><td>${index + 1}</td><td class="company">${stock.name}<span class="code">${stock.code}｜${stock.issueYear} 年發放</span></td><td class="num">${fmt(stock.price)}</td><td class="num">${fmt(stock.cashDividend)}</td><td class="num">${fmt(stock.stockDividend)}</td><td class="num yield">${pct(selectedYield(stock))}</td><td class="num">${pct(selectedFiveYearYield(stock))}</td><td><span class="status ${stock.offline ? 'offline' : ''}">${stock.offline ? '離線初始資料' : '已更新'}</span></td></tr>`).join('')}</tbody></table>`;
     }
     function chart(stocks) {
       const target = document.querySelector('#chart');
       if (!stocks.length) { target.style.display = 'none'; return; }
-      const maximum = Math.max(...stocks.map(stock => Number(stock.estimatedYield || 0)), 0.01);
+      const maximum = Math.max(...stocks.map(stock => Number(selectedYield(stock) || 0)), 0.01);
       target.style.display = 'block';
-      target.innerHTML = `<p class="chart-title">目前預估總殖利率比較（含配股）</p>${stocks.map(stock => { const width = Math.max((Number(stock.estimatedYield || 0) / maximum) * 100, 2); return `<div class="bar-row"><span class="bar-label">${stock.code} ${stock.name}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div><span class="bar-value">${pct(stock.estimatedYield)}</span></div>`; }).join('')}`;
+      const title = includeStock ? '目前預估總殖利率比較（含配股）' : '目前預估現金殖利率比較';
+      target.innerHTML = `<p class="chart-title">${title}</p>${stocks.map(stock => { const width = Math.max((Number(selectedYield(stock) || 0) / maximum) * 100, 2); return `<div class="bar-row"><span class="bar-label">${stock.code} ${stock.name}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div><span class="bar-value">${pct(selectedYield(stock))}</span></div>`; }).join('')}`;
     }
     async function refresh() {
-      chips(); const message = document.querySelector('#message');
+      chips(); updateToggle(); const message = document.querySelector('#message');
       if (!codes.length) { table([]); chart([]); message.textContent = ''; return; }
       message.textContent = '更新資料中…';
-      try { const response = await fetch(`/api/stocks?codes=${codes.join(',')}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || '查詢失敗'); chart(data.stocks); table(data.stocks); message.textContent = data.errors.length ? `${data.errors.length} 檔無法取得資料` : `已更新 ${data.stocks.length} 檔`; }
+      try { const response = await fetch(`/api/stocks?codes=${codes.join(',')}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || '查詢失敗'); const stocks = ordered(data.stocks); chart(stocks); table(stocks); message.textContent = data.errors.length ? `${data.errors.length} 檔無法取得資料` : `已更新 ${data.stocks.length} 檔`; }
       catch (error) { message.textContent = error.message; }
     }
     document.querySelector('#addForm').addEventListener('submit', event => { event.preventDefault(); const input = document.querySelector('#code'); const code = input.value.trim(); if (!/^\d{4,6}$/.test(code)) { input.focus(); return; } if (!codes.includes(code) && codes.length < 20) { codes.push(code); save(); refresh(); } input.value = ''; });
     document.querySelector('#samButton').addEventListener('click', () => { codes = [...new Set([...codes, ...samCodes])].slice(0, 20); save(); refresh(); });
+    document.querySelector('#stockToggle').addEventListener('click', () => { includeStock = !includeStock; localStorage.setItem(stockToggleKey, JSON.stringify(includeStock)); refresh(); });
     document.querySelector('#chips').addEventListener('click', event => { const code = event.target.dataset.code; if (code) { codes = codes.filter(item => item !== code); save(); refresh(); } });
     refresh();
   </script>
