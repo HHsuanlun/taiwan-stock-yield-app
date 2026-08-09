@@ -37,14 +37,18 @@ def query_stock(code: str) -> dict:
             raise ValueError(f"無法取得 {code} 的資料：{error}") from error
     rows.sort(key=lambda row: row["issueYear"], reverse=True)
     latest = rows[0]
-    annual_yields = [row["averageCashYield"] / 100 for row in rows if row.get("averageCashYield") is not None and row["issueYear"] >= latest["issueYear"] - 4]
+    annual_yields = [row["averageTotalDividendYield"] / 100 for row in rows if row.get("averageTotalDividendYield") is not None and row["issueYear"] >= latest["issueYear"] - 4]
     payload = {
         "code": code,
         "name": latest.get("stockName", name),
         "price": latest.get("currentPrice"),
         "cashDividend": latest.get("cashDividend"),
+        "stockDividend": latest.get("stockDividend"),
+        "exRightPrice": latest.get("exRightPrice"),
+        "stockDividendValue": latest.get("stockDividendValue"),
+        "totalDividendValue": latest.get("totalDividendValue"),
         "issueYear": latest.get("issueYear"),
-        "estimatedYield": latest["cashDividend"] / latest["currentPrice"] if latest.get("currentPrice") else None,
+        "estimatedYield": latest.get("currentTotalDividendYield", 0) / 100 if latest.get("currentTotalDividendYield") is not None else None,
         "fiveYearYield": sum(annual_yields) / len(annual_yields) if annual_yields else None,
         "offline": offline,
         "source": latest.get("sourceUrl"),

@@ -47,6 +47,36 @@ def number(value: str) -> float | None:
         return None
 
 
+def dividend_metrics(price: float | None, cash_dividend: float | None, stock_dividend: float | None) -> dict[str, float | None]:
+    """將股票股利換算為除權後價值，計算含配股的總殖利率。
+
+    FinMind 的股票股利 0.25 代表每 1,000 股配發 25 股，因此換算為
+    每股配股比例時需除以 10。例：價格 26.2、現金 0.8、股票 0.25，
+    除權價為 (26.2 - 0.8) / 1.025，總殖利率約為 5.4%。
+    """
+    cash = float(cash_dividend or 0)
+    stock = float(stock_dividend or 0)
+    stock_ratio = stock / 10
+    if price is None or price <= 0:
+        return {
+            "stockRatio": stock_ratio,
+            "exRightPrice": None,
+            "stockDividendValue": None,
+            "totalDividendValue": None,
+            "totalDividendYield": None,
+        }
+    ex_right_price = (price - cash) / (1 + stock_ratio)
+    stock_value = ex_right_price * stock_ratio
+    total_value = cash + stock_value
+    return {
+        "stockRatio": stock_ratio,
+        "exRightPrice": ex_right_price,
+        "stockDividendValue": stock_value,
+        "totalDividendValue": total_value,
+        "totalDividendYield": total_value / price * 100,
+    }
+
+
 def decode_page(raw: bytes, content_type: str) -> str:
     """依 HTTP / HTML 宣告解碼，避免 UTF-8 / Big5 造成表格名稱找不到。"""
     candidates = re.findall(r"charset=([\w-]+)", content_type, flags=re.I)
@@ -72,11 +102,16 @@ def parse_rows(page: str, stock_id: str, stock_name: str) -> list[dict]:
         cells = [clean_html(cell) for cell in re.findall(r"<t[dh]\b[^>]*>([\s\S]*?)</t[dh]>", tr, flags=re.I)]
         if len(cells) < 22 or not re.fullmatch(r"20\d{2}", cells[0]):
             continue
+        current_metrics = dividend_metrics(number(cells[16]), number(cells[4]), number(cells[7]))
+        average_metrics = dividend_metrics(number(cells[14]), number(cells[4]), number(cells[7]))
         rows.append({"stockId": stock_id, "stockName": stock_name, "issueYear": int(cells[0]), "fiscalYear": int(cells[1]),
                      "cashDividend": number(cells[4]), "stockDividend": number(cells[7]), "totalDividend": number(cells[8]),
                      "exDate": cells[11], "beforeExPrice": number(cells[12]), "exCashYield": number(cells[13]),
                      "averagePrice": number(cells[14]), "averageCashYield": number(cells[15]), "currentPrice": number(cells[16]),
-                     "currentCashYield": number(cells[17]), "sourceUrl": f"{SOURCE_BASE}{stock_id}"})
+                     "currentCashYield": number(cells[17]), "currentTotalDividendYield": current_metrics["totalDividendYield"],
+                     "averageTotalDividendYield": average_metrics["totalDividendYield"], "stockRatio": current_metrics["stockRatio"],
+                     "exRightPrice": current_metrics["exRightPrice"], "stockDividendValue": current_metrics["stockDividendValue"],
+                     "totalDividendValue": current_metrics["totalDividendValue"], "sourceUrl": f"{SOURCE_BASE}{stock_id}"})
     if not rows:
         raise ValueError("未找到可辨識的年度資料列")
     return rows
@@ -134,11 +169,16 @@ def fetch_rows(stock_id: str, stock_name: str) -> list[dict]:
         before_price = amount(dividend_results.get(record["exDate"], {}).get("before_price")) or None
         annual_prices = [value for value in yearly_prices.get(issue_year, []) if value]
         average_price = sum(annual_prices) / len(annual_prices) if annual_prices else None
+        current_metrics = dividend_metrics(latest_price or None, record["cash"], record["stock"])
+        average_metrics = dividend_metrics(average_price, record["cash"], record["stock"])
         rows.append({"stockId": stock_id, "stockName": display_name, "issueYear": issue_year, "fiscalYear": fiscal,
                      "cashDividend": record["cash"], "stockDividend": record["stock"], "totalDividend": record["cash"] + record["stock"],
                      "exDate": record["exDate"], "beforeExPrice": before_price, "exCashYield": record["cash"] / before_price * 100 if before_price else None,
                      "averagePrice": average_price, "averageCashYield": record["cash"] / average_price * 100 if average_price else None,
                      "currentPrice": latest_price or None, "currentCashYield": record["cash"] / latest_price * 100 if latest_price else None,
+                     "currentTotalDividendYield": current_metrics["totalDividendYield"], "averageTotalDividendYield": average_metrics["totalDividendYield"],
+                     "stockRatio": current_metrics["stockRatio"], "exRightPrice": current_metrics["exRightPrice"],
+                     "stockDividendValue": current_metrics["stockDividendValue"], "totalDividendValue": current_metrics["totalDividendValue"],
                      "sourceUrl": FINMIND_SOURCE})
     if not rows:
         raise ValueError("FinMind 沒有可用股利資料")
@@ -147,10 +187,15 @@ def fetch_rows(stock_id: str, stock_name: str) -> list[dict]:
 def fallback_rows(stock_id: str, stock_name: str) -> list[dict]:
     result = []
     for issue, fiscal, cash, stock, before, average, current in FALLBACK.get(stock_id, []):
+        current_metrics = dividend_metrics(current, cash, stock)
+        average_metrics = dividend_metrics(average, cash, stock)
         result.append({"stockId": stock_id, "stockName": stock_name, "issueYear": issue, "fiscalYear": fiscal,
                        "cashDividend": cash, "stockDividend": stock, "totalDividend": cash + stock, "exDate": "",
                        "beforeExPrice": before, "exCashYield": cash / before * 100, "averagePrice": average,
                        "averageCashYield": cash / average * 100, "currentPrice": current, "currentCashYield": cash / current * 100,
+                       "currentTotalDividendYield": current_metrics["totalDividendYield"], "averageTotalDividendYield": average_metrics["totalDividendYield"],
+                       "stockRatio": current_metrics["stockRatio"], "exRightPrice": current_metrics["exRightPrice"],
+                       "stockDividendValue": current_metrics["stockDividendValue"], "totalDividendValue": current_metrics["totalDividendValue"],
                        "sourceUrl": f"{SOURCE_BASE}{stock_id}"})
     return result
 
@@ -191,25 +236,25 @@ def create_workbook(rows: list[dict], offline: set[str]) -> None:
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     rows.sort(key=lambda item: (item["stockId"], -item["issueYear"]))
     summary = [[("台灣金融股｜股利與殖利率追蹤", 1)] + [(None, 0)] * 8, [("更新時間", 0), (datetime.now().strftime("%Y-%m-%d %H:%M"), 0)] + [(None, 0)] * 7, [(None, 0)] * 9,
-               [(x, 2) for x in ["代號", "公司", "最新發放年", "最新現金股利", "參考現價", "目前預估殖利率", "近 5 年平均現金殖利率", "資料狀態", "資料來源"]]]
+               [(x, 2) for x in ["代號", "公司", "最新發放年", "最新現金股利", "參考現價", "目前預估總殖利率", "近 5 年平均總殖利率", "資料狀態", "資料來源"]]]
     for stock_id, stock_name in STOCKS:
         stock_rows = [item for item in rows if item["stockId"] == stock_id]
         if not stock_rows:
             continue
         latest = max(stock_rows, key=lambda item: item["issueYear"])
-        five_year = [item["averageCashYield"] / 100 for item in stock_rows if item["issueYear"] >= latest["issueYear"] - 4 and item["averageCashYield"] is not None]
-        summary.append([(stock_id, 6), (stock_name, 6), (latest["issueYear"], 6), (latest["cashDividend"], 3), (latest["currentPrice"], 3), (latest["cashDividend"] / latest["currentPrice"] if latest["currentPrice"] else None, 4), (sum(five_year) / len(five_year) if five_year else None, 4), ("離線初始資料" if stock_id in offline else "已更新", 6), (latest["sourceUrl"], 6)])
+        five_year = [item["averageTotalDividendYield"] / 100 for item in stock_rows if item["issueYear"] >= latest["issueYear"] - 4 and item["averageTotalDividendYield"] is not None]
+        summary.append([(stock_id, 6), (stock_name, 6), (latest["issueYear"], 6), (latest["cashDividend"], 3), (latest["currentPrice"], 3), (latest["currentTotalDividendYield"] / 100 if latest["currentTotalDividendYield"] is not None else None, 4), (sum(five_year) / len(five_year) if five_year else None, 4), ("離線初始資料" if stock_id in offline else "已更新", 6), (latest["sourceUrl"], 6)])
     summary += [[(None, 0)] * 9] * 4
-    summary.append([("預估殖利率 = 最新已公告「現金股利」÷ 參考現價。此為推估值，非保證收益，且不包含股票股利。", 5)] + [(None, 0)] * 8)
+    summary.append([("預估總殖利率包含現金與配股價值：〔現金股利＋除權價×配股比例〕÷參考現價。此為推估值，非保證收益。", 5)] + [(None, 0)] * 8)
 
-    history_headers = ["代號", "公司", "股利發放年度", "股利所屬年度", "現金股利", "股票股利", "股利合計", "除權息日", "除息前年價", "除息現金殖利率", "全年平均價", "參考現價", "目前現金殖利率", "年均價現金殖利率", "資料來源", "備註"]
+    history_headers = ["代號", "公司", "股利發放年度", "股利所屬年度", "現金股利", "股票股利", "股利合計", "除權息日", "除息前年價", "除息現金殖利率", "全年平均價", "參考現價", "目前總殖利率", "年均價總殖利率", "資料來源", "備註"]
     history = [[(header, 2) for header in history_headers]]
     for item in rows:
-        history.append([(item["stockId"], 6), (item["stockName"], 6), (item["issueYear"], 6), (item["fiscalYear"], 6), (item["cashDividend"], 3), (item["stockDividend"], 3), (item["totalDividend"], 3), (item["exDate"], 6), (item["beforeExPrice"], 3), (item["exCashYield"] / 100 if item["exCashYield"] is not None else None, 4), (item["averagePrice"], 3), (item["currentPrice"], 3), (item["currentCashYield"] / 100 if item["currentCashYield"] is not None else None, 4), (item["averageCashYield"] / 100 if item["averageCashYield"] is not None else None, 4), (item["sourceUrl"], 6), ("", 6)])
+        history.append([(item["stockId"], 6), (item["stockName"], 6), (item["issueYear"], 6), (item["fiscalYear"], 6), (item["cashDividend"], 3), (item["stockDividend"], 3), (item["totalDividend"], 3), (item["exDate"], 6), (item["beforeExPrice"], 3), (item["exCashYield"] / 100 if item["exCashYield"] is not None else None, 4), (item["averagePrice"], 3), (item["currentPrice"], 3), (item["currentTotalDividendYield"] / 100 if item["currentTotalDividendYield"] is not None else None, 4), (item["averageTotalDividendYield"] / 100 if item["averageTotalDividendYield"] is not None else None, 4), (item["sourceUrl"], 6), ("", 6)])
     source = [[("資料來源與使用說明", 1)] + [(None, 0)] * 3, [(None, 0)] * 4, [(x, 2) for x in ["項目", "內容", "來源", "備註"]],
               [("歷年股利／歷史殖利率", 6), ("FinMind 股利政策、除權息結果與每日收盤價 API", 6), (FINMIND_SOURCE, 6), ("股利發放年度依除權息日認定。", 6)],
               [("參考現價", 6), ("FinMind 每日收盤價資料中的最新 close", 6), (FINMIND_SOURCE, 6), ("非即時報價；交易前請另行確認。", 6)],
-              [("預估殖利率", 6), ("最新已公告現金股利 ÷ 參考現價", 6), ("本程式計算", 6), ("不包含股票股利；非保證收益率。", 6)],
+              [("預估總殖利率", 6), ("〔現金股利＋除權價×配股比例〕÷參考現價", 6), ("本程式計算", 6), ("股票股利 0.25 = 每 1,000 股配發 25 股；非保證收益率。", 6)],
               [("離線初始資料", 6), ("無法連線或 API 回傳失敗時，使用內建歷史快照", 6), ("內建資料（2026-07-17）", 6), ("狀態欄會標示「離線初始資料」。", 6)]]
     sheets = [sheet_xml(summary, [12,12,13,15,13,18,22,16,60], ["A1:I1", "A11:I13"], {1: 24, 11: 36}), sheet_xml(history, [10,12,14,14,12,12,12,14,13,15,13,13,15,16,62,18]), sheet_xml(source, [22,44,64,42], ["A1:D1"], {1: 24})]
     content_types = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'''

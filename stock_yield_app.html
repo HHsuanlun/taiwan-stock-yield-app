@@ -23,16 +23,16 @@
   </style>
 </head>
 <body>
-  <header><div class="shell top"><h1>台股殖利率比較</h1><span class="sub">現金股利／參考現價</span></div></header>
+  <header><div class="shell top"><h1>台股殖利率比較</h1><span class="sub">現金＋配股價值／參考現價</span></div></header>
   <main>
     <section class="panel">
       <form class="add" id="addForm"><input id="code" inputmode="numeric" maxlength="6" placeholder="輸入股票代號，例如 2891" aria-label="股票代號"><button>新增股票</button><button type="button" id="samButton">Sam</button><span class="hint">最多 20 檔</span></form>
       <div class="chips" id="chips"></div>
     </section>
-    <div class="bar"><div><h2>殖利率比較</h2><div class="hint">依目前預估殖利率由高至低排列</div></div><div id="message"></div></div>
+    <div class="bar"><div><h2>殖利率比較</h2><div class="hint">依目前預估總殖利率（含配股）由高至低排列</div></div><div id="message"></div></div>
     <section class="panel chart" id="chart" aria-label="預估殖利率比較圖"></section>
     <div class="tablebox" id="tablebox"></div>
-    <footer>預估殖利率 = 最新已公告現金股利 ÷ 參考現價。資料來自 FinMind API，僅供資訊參考，不代表保證收益或投資建議。</footer>
+    <footer>預估總殖利率 =〔現金股利＋除權價 × 配股比例〕÷ 參考現價；除權價 =（參考現價－現金股利）÷（1＋配股比例）。股票股利 0.25 代表每 1,000 股配發 25 股（配股比例 2.5%）。資料來自 FinMind API，僅供資訊參考，不代表保證收益或投資建議。</footer>
   </main>
   <script>
     const key = 'tw-yield-codes';
@@ -44,14 +44,14 @@
     function chips() { document.querySelector('#chips').innerHTML = codes.map(code => `<span class="chip">${code}<button class="remove" aria-label="移除 ${code}" data-code="${code}">×</button></span>`).join(''); }
     function table(stocks) {
       if (!stocks.length) { document.querySelector('#tablebox').innerHTML = '<div class="panel empty">請先新增股票代號。</div>'; return; }
-      document.querySelector('#tablebox').innerHTML = `<table><thead><tr><th>#</th><th>公司</th><th class="num">參考現價</th><th class="num">最新現金股利</th><th class="num">目前預估殖利率</th><th class="num">近 5 年平均</th><th>資料狀態</th></tr></thead><tbody>${stocks.map((stock, index) => `<tr><td>${index + 1}</td><td class="company">${stock.name}<span class="code">${stock.code}｜${stock.issueYear} 年發放</span></td><td class="num">${fmt(stock.price)}</td><td class="num">${fmt(stock.cashDividend)}</td><td class="num yield">${pct(stock.estimatedYield)}</td><td class="num">${pct(stock.fiveYearYield)}</td><td><span class="status ${stock.offline ? 'offline' : ''}">${stock.offline ? '離線初始資料' : '已更新'}</span></td></tr>`).join('')}</tbody></table>`;
+      document.querySelector('#tablebox').innerHTML = `<table><thead><tr><th>#</th><th>公司</th><th class="num">參考現價</th><th class="num">現金股利</th><th class="num">股票股利</th><th class="num">目前預估總殖利率</th><th class="num">近 5 年平均</th><th>資料狀態</th></tr></thead><tbody>${stocks.map((stock, index) => `<tr><td>${index + 1}</td><td class="company">${stock.name}<span class="code">${stock.code}｜${stock.issueYear} 年發放</span></td><td class="num">${fmt(stock.price)}</td><td class="num">${fmt(stock.cashDividend)}</td><td class="num">${fmt(stock.stockDividend)}</td><td class="num yield">${pct(stock.estimatedYield)}</td><td class="num">${pct(stock.fiveYearYield)}</td><td><span class="status ${stock.offline ? 'offline' : ''}">${stock.offline ? '離線初始資料' : '已更新'}</span></td></tr>`).join('')}</tbody></table>`;
     }
     function chart(stocks) {
       const target = document.querySelector('#chart');
       if (!stocks.length) { target.style.display = 'none'; return; }
       const maximum = Math.max(...stocks.map(stock => Number(stock.estimatedYield || 0)), 0.01);
       target.style.display = 'block';
-      target.innerHTML = `<p class="chart-title">目前預估殖利率比較</p>${stocks.map(stock => { const width = Math.max((Number(stock.estimatedYield || 0) / maximum) * 100, 2); return `<div class="bar-row"><span class="bar-label">${stock.code} ${stock.name}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div><span class="bar-value">${pct(stock.estimatedYield)}</span></div>`; }).join('')}`;
+      target.innerHTML = `<p class="chart-title">目前預估總殖利率比較（含配股）</p>${stocks.map(stock => { const width = Math.max((Number(stock.estimatedYield || 0) / maximum) * 100, 2); return `<div class="bar-row"><span class="bar-label">${stock.code} ${stock.name}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div><span class="bar-value">${pct(stock.estimatedYield)}</span></div>`; }).join('')}`;
     }
     async function refresh() {
       chips(); const message = document.querySelector('#message');
