@@ -8,3 +8,14 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.10
+  - type: web
+    name: taiwan-stock-valuation
+    runtime: python
+    plan: free
+    rootDir: stock-valuation
+    buildCommand: echo No build required
+    startCommand: python run_local.py
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10

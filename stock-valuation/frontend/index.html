@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="以 P/E、P/B 與情境分析呈現透明、可重現的台股估值。">
+  <title>台股估值比較</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/currency.css">
+</head>
+<body>
+  <header class="topbar"><div class="shell top"><a class="brand" href="/">台股估值比較</a><span class="sub">P/E＋P/B／情境合理價</span></div></header>
+  <main>
+    <section class="hero">
+      <h1>股票估值查詢</h1>
+      <p class="lede">使用歷史本益比、預估 EPS 與股價淨值比，計算保守、合理、樂觀三種估值情境。</p>
+      <form id="searchForm" class="search">
+        <label for="ticker" class="sr-only">輸入台股代號</label>
+        <div><input id="ticker" value="2881" inputmode="numeric" maxlength="6" placeholder="輸入股票代號，例如 2881"><button>查詢估值</button></div>
+        <small id="searchHint">MVP 第一階段支援 2881 富邦金</small>
+      </form>
+    </section>
+
+    <section id="app" class="dashboard" aria-live="polite">
+      <div class="company-row">
+        <div><p class="eyebrow">VALUATION SNAPSHOT</p><h2><span id="company">富邦金</span> <small id="stockCode">2881</small></h2></div>
+        <div class="price"><span>參考股價</span><strong id="currentPrice">—</strong><small>資料日 <span id="asOf">—</span></small></div>
+      </div>
+
+      <div class="scenario-grid">
+        <article class="scenario bear"><span>保守情境</span><strong id="bearValue">—</strong><small id="bearInputs">—</small></article>
+        <article class="scenario base"><span>中性情境</span><strong id="fairValue">—</strong><small id="baseInputs">—</small><em>P/E 中性組合</em></article>
+        <article class="scenario bull"><span>樂觀情境</span><strong id="bullValue">—</strong><small id="bullInputs">—</small></article>
+        <article class="upside"><span>相對綜合合理價</span><strong id="upside">—</strong><small><b id="classification">—</b> · 模型信心 <b id="confidence">—</b></small></article>
+      </div>
+      <p class="scenario-note">三個情境摘要為對角線的 EPS × P/E 組合；綜合合理價另以 P/E 與 P/B 權重計算。</p>
+
+      <div class="content-grid">
+        <article class="panel chart-panel">
+          <div class="panel-head"><div><p class="eyebrow">HISTORICAL RELATIONSHIP</p><h3>EPS 與本益比的關係</h3></div><div class="legend"><i></i>歷史年度 <i class="forecast"></i>目前模型</div></div>
+          <svg id="scatter" role="img" aria-label="歷史 EPS 與本益比散點圖"></svg>
+          <p id="correlationNote" class="chart-note"></p>
+        </article>
+        <aside class="panel assumptions">
+          <div class="panel-head"><div><p class="eyebrow">MANUAL OVERRIDE</p><h3>調整核心假設</h3></div><button id="reset" class="text-button" type="button">恢復預設</button></div>
+          <label>中性 EPS <output id="epsOut">10.95</output><input id="eps" type="range" min="4" max="16" step="0.01" value="10.95"></label>
+          <p id="epsMethod" class="formula">分析師 Low 9.94／Median 10.95／High 11.86</p>
+          <label>預估每股淨值 BPS <output id="bpsOut">83.7</output><input id="bps" type="range" min="50" max="120" step="0.1" value="83.7"></label>
+          <p id="bpsMethod" class="formula">2026 上半年普通股每股淨值 83.7；BPS 為期末存量，不作年化</p>
+          <div class="weight-title"><span>綜合模型權重</span><output id="weightOut">P/E 50% · P/B 50%</output></div>
+          <input id="peWeight" type="range" min="0" max="100" step="5" value="50" aria-label="P/E 模型權重">
+          <p class="formula">合理價 = P/E 目標價 × 權重 + P/B 目標價 × 權重</p>
+        </aside>
+      </div>
+
+      <div class="model-grid">
+        <article class="model-card"><p>P/E 模型</p><strong id="peTarget">—</strong><dl><div><dt>Historical Fair P/E</dt><dd id="historicalFairPe">—</dd></div><div><dt>Current Regime P/E</dt><dd id="currentRegimePe">—</dd></div><div><dt>Final Model Fair P/E</dt><dd id="fairPe">—</dd></div><div><dt>目前隱含 P/E</dt><dd id="impliedPe">—</dd></div><div><dt>相對歷史模型溢價</dt><dd id="historicalPremium">—</dd></div><div><dt>相對最終模型溢價</dt><dd id="pePremium">—</dd></div><div><dt>歷史中位數／平均</dt><dd id="historyPeStats">—</dd></div><div><dt>近期年度中位數</dt><dd id="recentPe">—</dd></div><div><dt>迴歸 P/E／R²</dt><dd id="regressionStats">—</dd></div><div><dt>Structural Re-rating</dt><dd id="rerating">—</dd></div><div><dt>Current Regime 樣本</dt><dd id="regimeSource">—</dd></div><div><dt>Regime Median／MAD</dt><dd id="regimeStats">—</dd></div><div><dt>持續性</dt><dd id="persistence">—</dd></div><div><dt>基本面分數</dt><dd id="fundamentalConfirm">—</dd></div><div><dt>歷史／Regime 權重</dt><dd id="layerWeights">—</dd></div><div><dt>調整前／調整後 P/E</dt><dd id="basePeAdjust">—</dd></div><div><dt>MAD／情境 spread</dt><dd id="spreadStats">—</dd></div><div><dt>歷史模型有效權重</dt><dd id="effectiveWeights">—</dd></div><div><dt>Confidence Score</dt><dd id="confidenceScore">—</dd></div></dl></article>
+        <article class="model-card"><p>P/B 模型</p><strong id="pbTarget">—</strong><dl><div><dt>Historical Fair P/B</dt><dd id="historicalFairPb">—</dd></div><div><dt>Current Regime P/B</dt><dd id="currentRegimePb">—</dd></div><div><dt>Final Fair P/B</dt><dd id="fairPb">—</dd></div><div><dt>Bear／Base／Bull P/B</dt><dd id="pbScenarios">—</dd></div><div><dt>歷史中位數／近期中位數</dt><dd id="pbMedians">—</dd></div><div><dt>Regime Ratio／Persistence</dt><dd id="pbRegime">—</dd></div><div><dt>基本面／BPS品質／可比性</dt><dd id="pbScores">—</dd></div><div><dt>歷史／Regime 權重</dt><dd id="pbLayerWeights">—</dd></div><div><dt>PB MAD／Spread</dt><dd id="pbSpread">—</dd></div><div><dt>傳統 BPS／目前 P/B</dt><dd><span id="forecastBps">—</span>／<span id="currentPb">—</span></dd></div><div><dt>調整後 BPS／目前 P/B</dt><dd><span id="adjustedBps">—</span>／<span id="adjustedCurrentPb">—</span></dd></div><div><dt>調整後模型狀態</dt><dd id="adjustedPbStatus">—</dd></div><div><dt>相對歷史／最終溢價</dt><dd id="pbPremiums">—</dd></div><div><dt>目前股價所需 BPS</dt><dd id="requiredBps">—</dd></div><div><dt>P/B Confidence</dt><dd id="pbConfidence">—</dd></div></dl></article>
+      </div>
+
+      <article class="panel matrix-panel">
+        <div class="panel-head"><div><p class="eyebrow">VALUATION MATRIX</p><h3>EPS × P/E 估值矩陣</h3></div><span class="matrix-hint">單位：新台幣</span></div>
+        <div class="matrix-wrap"><table class="matrix"><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div>
+        <p class="chart-note">EPS 與 P/E 情境彼此獨立。九種組合可避免只看「雙重悲觀」或「雙重樂觀」的單一路徑。</p>
+      </article>
+
+      <article class="panel matrix-panel">
+        <div class="panel-head"><div><p class="eyebrow">BOOK VALUE MATRIX</p><h3>BPS × P/B 估值矩陣</h3></div><span class="matrix-hint">單位：新台幣</span></div>
+        <div class="matrix-wrap"><table class="matrix"><thead id="pbMatrixHead"></thead><tbody id="pbMatrixBody"></tbody></table></div>
+        <p class="chart-note">傳統BPS與P/B情境彼此獨立；調整後BPS因缺少可比歷史倍數，不套用此矩陣。</p>
+      </article>
+
+      <div class="model-grid">
+        <article class="model-card"><p>綜合合理價</p><strong id="compositeValue">—</strong><dl><div><dt>P/E 估值</dt><dd id="peFairValue">—</dd></div><div><dt>P/B 估值</dt><dd id="pbFairValue">—</dd></div><div><dt>模型權重</dt><dd id="modelWeights">—</dd></div><div><dt>安全邊際</dt><dd id="safetyMargin">—</dd></div></dl></article>
+        <article class="model-card"><p>目前股價反推</p><strong class="plain-value" id="requiredEps">—</strong><dl><div><dt>目前股價</dt><dd id="reversePrice">—</dd></div><div><dt>合理 P/E</dt><dd id="reversePe">—</dd></div><div><dt>所需 EPS</dt><dd id="reverseEps">—</dd></div><div><dt>模型版本</dt><dd id="version">—</dd></div></dl></article>
+      </div>
+
+      <article class="panel history-panel">
+        <div class="panel-head"><div><p class="eyebrow">AUDIT TRAIL</p><h3>歷史估值資料</h3></div><button id="toggleTable" class="text-button">展開資料</button></div>
+        <div id="tableWrap" hidden><table><thead><tr><th>年度</th><th>EPS</th><th>P/E</th><th>BPS</th><th>P/B</th></tr></thead><tbody id="historyRows"></tbody></table></div>
+        <footer><b>資料聲明</b><span id="sourceNote">—</span> 本頁為估值方法示範，不構成投資建議或未來價格保證。</footer>
+      </article>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

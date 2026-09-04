@@ -1,0 +1,40 @@
+.price strong::before {
+  content: "NT$ ";
+  font-size: 14px;
+}
+
+.scenario strong::before,
+.model-card > strong::before {
+  content: "NT$ ";
+  font-size: 0.5em;
+}
+
+.scenario small {
+  display: block;
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+}
+
+.scenario em {
+  display: inline-block;
+  margin-top: 6px;
+  color: #14724b;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.scenario-note {
+  margin: -8px 2px 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.matrix-wrap { overflow-x: auto; }
+.matrix { min-width: 620px; }
+.matrix th { text-align: center; line-height: 1.45; }
+.matrix td { text-align: center; font-weight: 700; }
+.matrix td::before { content: "NT$ "; color: #64748b; font-size: 11px; }
+.matrix td.focus { background: #e8f6ee; color: #14724b; }
+.matrix-hint { color: #64748b; font-size: 12px; }
+.plain-value::before { content: none !important; }
