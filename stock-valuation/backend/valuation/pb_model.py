@@ -100,6 +100,16 @@ def calculate_pb_model(history: list[dict], current_price: float, forecast: dict
 
     current_traditional_pb = current_price / bps
     current_adjusted_pb = current_price / adjusted_bps
+    adjusted_observations = [
+        float(value) for value in forecast.get("adjusted_pb_observations", []) if value and value > 0
+    ]
+    adjusted_observation_count = len(adjusted_observations) or (1 if adjusted_bps > 0 else 0)
+    adjusted_status = (
+        "active" if adjusted_observation_count >= 8
+        else "experimental" if adjusted_observation_count >= 4
+        else "reference_only" if adjusted_observation_count else "unavailable"
+    )
+    adjusted_discount_vs_traditional_pct = (current_adjusted_pb / current_traditional_pb - 1) * 100
     return {
         "traditional": {
             "historical_median": hist_median, "historical_mean": hist_mean, "recent_median": recent_median,
@@ -116,7 +126,12 @@ def calculate_pb_model(history: list[dict], current_price: float, forecast: dict
         "adjusted": {
             "bps": adjusted_bps, "current_pb": current_adjusted_pb, "historical_fair_pb": None, "current_regime_pb": None,
             "final_fair_pb": None, "target_price": None, "confidence": "低", "confidence_score": 0.20,
-            "status": "長期 adjusted P/B 歷史不足；未套用 traditional P/B 倍數",
+            "status": adjusted_status, "historical_observation_count": adjusted_observation_count,
+            "fair_pb": None, "fair_value": None, "included_in_composite": False,
+            "discount_vs_traditional_pct": adjusted_discount_vs_traditional_pct,
+            "reason": "Insufficient comparable adjusted P/B history",
+            "status_label": "補充參考／歷史資料不足",
+            "warning": "調整後 P/B 目前僅作為補充市場參考。由於缺乏足夠可比較的歷史 Adjusted BPS / Adjusted P/B 資料，因此暫不產生獨立合理 P/B 或合理價。模型不會將傳統 P/B 倍數直接套用到調整後 BPS，以避免會計基礎錯配。",
         },
         "bps_scenarios": {key: round(value, 2) for key, value in bps_scenarios.items()},
         "pb_scenarios": {key: round(value, 3) for key, value in pb_scenarios.items()},

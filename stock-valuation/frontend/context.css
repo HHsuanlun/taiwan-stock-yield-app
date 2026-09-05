@@ -1,0 +1,68 @@
+.adjusted-context {
+  border-left: 4px solid #7b8da1;
+}
+
+.status-pill {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #edf3f9;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.context-grid > div {
+  padding: 13px;
+  background: #f7f9fc;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.context-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.context-grid strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--navy);
+  font-size: 18px;
+}
+
+.context-summary,
+.warning-note,
+.primary-note {
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.warning-note {
+  margin: 12px 0 0;
+  padding: 12px;
+  border: 1px solid #ead7a0;
+  border-radius: 7px;
+  background: #fff8e7;
+  color: #665321;
+}
+
+.primary-note {
+  margin: 10px 0;
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .context-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 430px) {
+  .context-grid { grid-template-columns: 1fr; }
+}

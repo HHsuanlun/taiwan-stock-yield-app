@@ -101,6 +101,12 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
         "fair_pb": fair_pb,
         "pb_target_price": round(pb_price, 2),
         "fair_value": round(fair_value, 2),
+        "composite": {
+            "primary_fair_value": round(fair_value, 2),
+            "includes_adjusted_pb": False,
+            "label": "可驗證資料基礎合理價",
+            "basis": "僅使用具有可比較歷史基礎的 P/E 與 Traditional P/B 模型",
+        },
         "bear_value": round(bear_price, 2),
         "bull_value": round(bull_price, 2),
         "upside_pct": round(upside, 2),
@@ -189,5 +195,5 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             {"name": "富邦金控 2026 上半年財務數字", "as_of": "2026-06-30", "note": "普通股每股淨值 83.7 元；調整後每股淨值 109.3 元"},
             {"name": "Golden test fixture", "as_of": forecast["as_of"], "note": "歷史 EPS、P/E 與分析師預估用於驗證演算法與介面"},
         ],
-        "model_version": "tw-valuation-mvp-2.1",
+        "model_version": "tw-valuation-mvp-2.2",
     }

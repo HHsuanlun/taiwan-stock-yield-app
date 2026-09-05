@@ -140,6 +140,17 @@ class Valuation2881Tests(unittest.TestCase):
         self.assertIsNone(adjusted["final_fair_pb"])
         self.assertIsNone(adjusted["target_price"])
         self.assertEqual(adjusted["confidence"], "低")
+        self.assertEqual(adjusted["status"], "reference_only")
+        self.assertEqual(adjusted["historical_observation_count"], 1)
+        self.assertIsNone(adjusted["fair_value"])
+        self.assertFalse(adjusted["included_in_composite"])
+
+    def test_primary_composite_excludes_adjusted_pb(self):
+        result = fixture_result()
+        self.assertEqual(result["composite"]["primary_fair_value"], result["fair_value"])
+        self.assertFalse(result["composite"]["includes_adjusted_pb"])
+        adjusted = result["assumptions"]["pb_model"]["adjusted"]
+        self.assertAlmostEqual(adjusted["discount_vs_traditional_pct"], -23.33, delta=0.1)
 
     def test_pb_matrix_and_spread(self):
         provider = FixtureProvider()
