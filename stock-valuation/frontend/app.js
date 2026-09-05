@@ -67,7 +67,7 @@ async function calculate() {
   const peWeight=Number($("peWeight").value)/100;
   const payload={ticker:$("ticker").value.trim()};if(userCoreOverride){payload.forecast_eps=Number($("eps").value);payload.forecast_bps=Number($("bps").value);}if(userWeightOverride){payload.pe_weight=peWeight;payload.pb_weight=1-peWeight;payload.weights_are_final=true;}
   $("searchHint").textContent="正在查找股票與估值資料…";$("searchHint").className="";
-  try{const res=await fetch("/api/valuation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!res.ok)throw new Error((await res.json()).detail||"估值服務暫時無法使用");render(await res.json());$("ticker").value=latest.ticker;$("searchHint").textContent=`已載入 ${latest.company_name} ${latest.ticker}；Yahoo 最新股價、FinMind 歷史估值資料。`;$("searchHint").className=""}catch(err){$("searchHint").textContent=err.message;$("searchHint").className="error"}
+  try{const res=await fetch("/api/valuation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!res.ok)throw new Error((await res.json()).detail||"估值服務暫時無法使用");render(await res.json());$("ticker").value=latest.ticker;$("searchHint").textContent=`已載入 ${latest.company_name} ${latest.ticker}；實際採用來源請見下方資料聲明。`;$("searchHint").className=""}catch(err){$("searchHint").textContent=err.message;$("searchHint").className="error"}
 }
 
 function syncControls(){setText("epsOut",Number($("eps").value).toFixed(2));setText("bpsOut",Number($("bps").value).toFixed(1));const w=Number($("peWeight").value);setText("weightOut",`P/E ${w.toFixed(1)}% · P/B ${(100-w).toFixed(1)}%`);calculate()}
