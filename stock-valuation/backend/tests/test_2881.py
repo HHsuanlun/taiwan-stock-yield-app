@@ -4,6 +4,14 @@ from backend.data.providers import FixtureProvider
 from backend.valuation.pe_model import DEFAULT_PE_CONFIG, fair_pe
 from backend.valuation.pb_model import calculate_pb_model
 from backend.valuation.valuation_engine import calculate, classify
+from backend.valuation.sustainable_pb import (
+    calculate_expectation_gap,
+    calculate_fair_pb,
+    calculate_implied_roe,
+    calculate_pb_fair_value,
+    calculate_sustainable_pb,
+    validate_accounting_basis,
+)
 
 
 def fixture_result(**overrides):
@@ -12,6 +20,29 @@ def fixture_result(**overrides):
 
 
 class Valuation2881Tests(unittest.TestCase):
+    def test_sustainable_pb_formula_functions(self):
+        basis = validate_accounting_basis("traditional", "traditional")
+        fair_pb = calculate_fair_pb(0.13, 0.03, 0.09)
+        implied_roe = calculate_implied_roe(150.5 / 83.7, 0.03, 0.09)
+        self.assertAlmostEqual(fair_pb, 1.6667, places=3)
+        self.assertAlmostEqual(calculate_pb_fair_value(83.7, fair_pb, basis), 139.5, places=1)
+        self.assertAlmostEqual(implied_roe, 0.1379, places=3)
+        self.assertAlmostEqual(calculate_expectation_gap(implied_roe, 0.13), 0.0079, places=3)
+
+    def test_accounting_basis_mismatch_blocks_pb_value(self):
+        basis = validate_accounting_basis("traditional", "adjusted")
+        self.assertFalse(basis["valid"])
+        self.assertIsNone(calculate_pb_fair_value(109.3, 1.5, basis))
+
+    def test_primary_pb_uses_sustainable_roe_not_forward_eps(self):
+        provider = FixtureProvider()
+        model = calculate_sustainable_pb(provider.get_history("2881"), 150.5, 83.7, provider.get_forecasts("2881"))
+        self.assertEqual(model["roe"]["level"], 2)
+        self.assertTrue(model["basis_check"]["valid"])
+        self.assertIn("未使用 Forward EPS", model["roe"]["reason"])
+        baseline = fixture_result()
+        changed = fixture_result(forecast_eps=13.0)
+        self.assertEqual(baseline["fair_pb"], changed["fair_pb"])
     def test_complete_2881_valuation(self):
         result = fixture_result()
         self.assertEqual(result["ticker"], "2881")

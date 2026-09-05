@@ -109,6 +109,7 @@
 .heat-heading p { margin: 0; color: var(--muted); font-size: 13px; }
 .heat-label { padding: 6px 9px; border-radius: 999px; background: #edf3f9; color: var(--blue); font-size: 12px; font-weight: 700; }
 .heat-card > strong { display: block; margin-top: 8px; }
+.cross-validation { margin: 12px 0; padding: 11px; border-radius: 6px; background: #f7f9fc; color: #52677b; font-size: 12px; line-height: 1.65; }
 
 @media (max-width: 700px) {
   html, body { max-width: 100%; overflow-x: hidden; }

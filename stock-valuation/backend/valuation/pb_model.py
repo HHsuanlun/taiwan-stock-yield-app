@@ -103,7 +103,10 @@ def calculate_adjusted_pb_layer(
     )
     required_return = float(forecast.get("required_return", cfg["base_required_return"]))
     roe_anchor = None
-    if normalized_roe is not None and float(normalized_roe) > growth_rate and required_return > growth_rate:
+    roe_basis = forecast.get("normalized_roe_basis")
+    bps_basis = forecast.get("adjusted_bps_basis")
+    basis_matches = roe_basis is not None and roe_basis == bps_basis
+    if basis_matches and normalized_roe is not None and float(normalized_roe) > growth_rate and required_return > growth_rate:
         roe_pb = (float(normalized_roe) - growth_rate) / (required_return - growth_rate)
         roe_anchor = {
             "pb": roe_pb,
@@ -112,6 +115,7 @@ def calculate_adjusted_pb_layer(
             "growth_rate": growth_rate,
             "required_return": required_return,
             "required_return_is_assumption": "required_return" not in forecast,
+            "accounting_basis": roe_basis,
         }
 
     peer_anchor = forecast.get("peer_adjusted_pb_anchor")
@@ -171,6 +175,12 @@ def calculate_adjusted_pb_layer(
         "included_in_expanded_composite": True,
         "included_in_primary_composite": False,
         "reason": "Insufficient comparable adjusted P/B history; provisional anchors used",
+        "accounting_basis_check": {
+            "roe_basis": roe_basis,
+            "bps_basis": bps_basis,
+            "matches": basis_matches,
+            "note": "ROE anchor is excluded when accounting bases differ or are unspecified.",
+        },
         "warning": "由於尚未累積足夠可比較的歷史 Adjusted P/B 資料，此估值屬暫估模型，可信度低於正式歷史估值模型。Current Adjusted P/B 僅用於市場比較，沒有進入合理倍數計算。",
     }
 

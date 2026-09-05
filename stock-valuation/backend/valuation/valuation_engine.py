@@ -3,6 +3,7 @@ from __future__ import annotations
 from .pe_model import fair_pe
 from .pb_model import calculate_pb_model
 from .valuation_heat import calculate_valuation_heat
+from .sustainable_pb import calculate_sustainable_pb, compare_independent_valuations
 
 
 def classify(price_to_fair: float) -> str:
@@ -64,7 +65,34 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
         bull_pe = min(base_pe + spread, p90 * 1.10)
 
     pb = calculate_pb_model(history, snapshot["current_price"], {**forecast, "forecast_bps": bps})
-    fair_pb = pb["traditional"]["final_fair_pb"]
+    capital_efficiency = calculate_sustainable_pb(history, snapshot["current_price"], bps, forecast)
+    if capital_efficiency.get("fair_pb") is None:
+        raise ValueError("Sustainable P/B model lacks basis-consistent data")
+    fair_pb = capital_efficiency["fair_pb"]
+    capital_confidence_score = 0.65 if capital_efficiency["confidence"] == "Medium" else 0.45
+    traditional = pb["traditional"]
+    traditional.update({
+        "final_fair_pb": fair_pb,
+        "base_pb": fair_pb,
+        "bear_pb": capital_efficiency["sensitivity_pb"]["bear"],
+        "bull_pb": capital_efficiency["sensitivity_pb"]["bull"],
+        "spread": capital_efficiency["sensitivity_pb"]["bull"] - fair_pb,
+        "premium_to_final_pct": (capital_efficiency["current_pb"] / fair_pb - 1) * 100,
+        "required_bps": snapshot["current_price"] / fair_pb,
+        "confidence_score": capital_confidence_score,
+        "confidence": capital_efficiency["confidence"],
+        "valuation_basis": "sustainable_roe",
+    })
+    pb["pb_scenarios"] = {key: round(value, 3) for key, value in capital_efficiency["sensitivity_pb"].items()}
+    traditional["target_prices"] = {
+        name: pb["bps_scenarios"][name] * capital_efficiency["sensitivity_pb"][name]
+        for name in ("bear", "base", "bull")
+    }
+    traditional["valuation_matrix"] = [
+        {"scenario": row_name, "bps": pb["bps_scenarios"][row_name], "prices": {col_name: round(pb["bps_scenarios"][row_name] * multiple, 2) for col_name, multiple in capital_efficiency["sensitivity_pb"].items()}}
+        for row_name in ("bear", "base", "bull")
+    ]
+    pb["capital_efficiency"] = capital_efficiency
     pe_price = base_eps * base_pe
     pb_price = bps * fair_pb
     if overrides.get("weights_are_final"):
@@ -76,6 +104,7 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
         total = pe_weight + pb_weight
         pe_weight, pb_weight = pe_weight / total, pb_weight / total
     fair_value = pe_price * pe_weight + pb_price * pb_weight
+    cross_validation = compare_independent_valuations(pe_price, pb_price)
 
     adjusted = pb["adjusted"]
     adjusted_family_cap = 0.30 if adjusted["status"] == "provisional" else 0.40
@@ -93,6 +122,11 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
         "traditional_pb": pb_weight * traditional_family_weight,
         "adjusted_pb": pb_weight * adjusted_family_weight,
     }
+    rounded_expanded_weights = {
+        "pe": round(expanded_weights["pe"], 3),
+        "traditional_pb": round(expanded_weights["traditional_pb"], 3),
+    }
+    rounded_expanded_weights["adjusted_pb"] = round(1 - rounded_expanded_weights["pe"] - rounded_expanded_weights["traditional_pb"], 3)
 
     bear_price = bear_eps * bear_pe
     base_price = base_eps * base_pe
@@ -146,7 +180,7 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             "expanded_fair_value": round(expanded_fair_value, 2),
             "expanded_pb_family_value": round(expanded_pb_value, 2),
             "expanded_includes_provisional": adjusted["status"] == "provisional",
-            "expanded_weights": {key: round(value, 3) for key, value in expanded_weights.items()},
+            "expanded_weights": rounded_expanded_weights,
         },
         "bear_value": round(composite_scenario_prices["bear"], 2),
         "bull_value": round(composite_scenario_prices["bull"], 2),
@@ -155,6 +189,8 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
         "classification": classify(price_to_fair),
         "confidence": confidence(pe),
         "valuation_heat": valuation_heat,
+        "capital_efficiency": capital_efficiency,
+        "cross_validation": cross_validation,
         "historical": history,
         "assumptions": {
             "forecast_eps": round(base_eps, 2),
@@ -248,5 +284,5 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             {"name": "富邦金控 2026 上半年財務數字", "as_of": "2026-06-30", "note": "普通股每股淨值 83.7 元；調整後每股淨值 109.3 元"},
             {"name": "Golden test fixture", "as_of": forecast["as_of"], "note": "歷史 EPS、P/E 與分析師預估用於驗證演算法與介面"},
         ],
-        "model_version": "tw-valuation-mvp-2.5",
+        "model_version": "tw-valuation-mvp-2.6",
     }
