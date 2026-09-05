@@ -1,6 +1,6 @@
 import unittest
 
-from backend.data.providers import FixtureProvider
+from backend.data.providers import FixtureProvider, LiveStockProvider
 from backend.valuation.pe_model import DEFAULT_PE_CONFIG, fair_pe
 from backend.valuation.pb_model import calculate_pb_model
 from backend.valuation.valuation_engine import calculate, classify
@@ -20,6 +20,12 @@ def fixture_result(**overrides):
 
 
 class Valuation2881Tests(unittest.TestCase):
+    def test_stock_name_and_code_resolution(self):
+        provider = LiveStockProvider()
+        provider._names = (10**20, {"2881": {"name": "富邦金", "industry": "金融"}, "2882": {"name": "國泰金", "industry": "金融"}})
+        self.assertEqual(provider.resolve("2882"), "2882")
+        self.assertEqual(provider.resolve("國泰金"), "2882")
+
     def test_sustainable_pb_formula_functions(self):
         basis = validate_accounting_basis("traditional", "traditional")
         fair_pb = calculate_fair_pb(0.13, 0.03, 0.09)

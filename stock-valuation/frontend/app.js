@@ -1,6 +1,7 @@
 const $ = (id) => document.getElementById(id);
 let latest;
 let userWeightOverride=false;
+let userCoreOverride=false;
 
 function money(value) { return Number(value).toFixed(1); }
 function setText(id, value) { const element=$(id); if(element) element.textContent=value; }
@@ -22,6 +23,12 @@ function drawScatter(data) {
 function render(data) {
   latest=data;
   const a=data.assumptions;
+  if(!userCoreOverride){
+    const eps=$('eps'),bps=$('bps');
+    eps.min=Math.max(.01,a.forecast_eps*.35).toFixed(2);eps.max=(a.forecast_eps*1.8).toFixed(2);eps.value=a.forecast_eps;
+    bps.min=Math.max(.1,a.forecast_bps*.5).toFixed(1);bps.max=(a.forecast_bps*1.5).toFixed(1);bps.value=a.forecast_bps;
+    setText('epsOut',a.forecast_eps.toFixed(2));setText('bpsOut',a.forecast_bps.toFixed(1));
+  }
   setText("company",data.company_name);setText("stockCode",data.ticker);setText("currentPrice",money(data.current_price));setText("asOf",data.source_notes[0].as_of);
   setText("bearValue",money(data.bear_value));setText("fairValue",money(data.fair_value));setText("bullValue",money(data.bull_value));
   setText("upside",`${data.upside_pct>=0?"+":""}${data.upside_pct.toFixed(1)}%`);setText("classification",data.classification);setText("confidence",data.confidence);
@@ -58,13 +65,14 @@ function render(data) {
 
 async function calculate() {
   const peWeight=Number($("peWeight").value)/100;
-  const eps=Number($("eps").value);const payload={ticker:$("ticker").value.trim(),forecast_eps:eps,forecast_bps:Number($("bps").value)};if(userWeightOverride){payload.pe_weight=peWeight;payload.pb_weight=1-peWeight;payload.weights_are_final=true;}
-  try{const res=await fetch("/api/valuation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!res.ok)throw new Error((await res.json()).detail||"估值服務暫時無法使用");render(await res.json());$("searchHint").textContent="MVP 第一階段支援 2881 富邦金";$("searchHint").className=""}catch(err){$("searchHint").textContent=err.message;$("searchHint").className="error"}
+  const payload={ticker:$("ticker").value.trim()};if(userCoreOverride){payload.forecast_eps=Number($("eps").value);payload.forecast_bps=Number($("bps").value);}if(userWeightOverride){payload.pe_weight=peWeight;payload.pb_weight=1-peWeight;payload.weights_are_final=true;}
+  $("searchHint").textContent="正在查找股票與估值資料…";$("searchHint").className="";
+  try{const res=await fetch("/api/valuation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!res.ok)throw new Error((await res.json()).detail||"估值服務暫時無法使用");render(await res.json());$("ticker").value=latest.ticker;$("searchHint").textContent=`已載入 ${latest.company_name} ${latest.ticker}；Yahoo 最新股價、FinMind 歷史估值資料。`;$("searchHint").className=""}catch(err){$("searchHint").textContent=err.message;$("searchHint").className="error"}
 }
 
 function syncControls(){setText("epsOut",Number($("eps").value).toFixed(2));setText("bpsOut",Number($("bps").value).toFixed(1));const w=Number($("peWeight").value);setText("weightOut",`P/E ${w.toFixed(1)}% · P/B ${(100-w).toFixed(1)}%`);calculate()}
-let timer;["eps","bps"].forEach(id=>$(id).addEventListener("input",()=>{clearTimeout(timer);timer=setTimeout(syncControls,80)}));$("peWeight").addEventListener("input",()=>{userWeightOverride=true;clearTimeout(timer);timer=setTimeout(syncControls,80)});
-$("searchForm").addEventListener("submit",e=>{e.preventDefault();calculate()});
-$("reset").addEventListener("click",()=>{userWeightOverride=false;$("eps").value=10.95;$("bps").value=83.7;calculate()});
+let timer;["eps","bps"].forEach(id=>$(id).addEventListener("input",()=>{userCoreOverride=true;clearTimeout(timer);timer=setTimeout(syncControls,80)}));$("peWeight").addEventListener("input",()=>{userWeightOverride=true;clearTimeout(timer);timer=setTimeout(syncControls,80)});
+$("searchForm").addEventListener("submit",e=>{e.preventDefault();userCoreOverride=false;userWeightOverride=false;calculate()});
+$("reset").addEventListener("click",()=>{userCoreOverride=false;userWeightOverride=false;calculate()});
 $("toggleTable").addEventListener("click",()=>{const wrap=$("tableWrap");wrap.hidden=!wrap.hidden;$("toggleTable").textContent=wrap.hidden?"展開資料":"收合資料"});
 calculate();

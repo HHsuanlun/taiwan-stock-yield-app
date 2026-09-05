@@ -14,11 +14,11 @@
   <main>
     <section class="hero">
       <h1>股票估值查詢</h1>
-      <p class="lede">使用歷史本益比、預估 EPS 與股價淨值比，計算保守、合理、樂觀三種估值情境。</p>
+      <p class="lede">輸入台股代號或名稱，自動查找股價、EPS、BPS、P/E 與 P/B，計算保守、合理、樂觀三種估值情境。</p>
       <form id="searchForm" class="search">
-        <label for="ticker" class="sr-only">輸入台股代號</label>
-        <div><input id="ticker" value="2881" inputmode="numeric" maxlength="6" placeholder="輸入股票代號，例如 2881"><button>查詢估值</button></div>
-        <small id="searchHint">MVP 第一階段支援 2881 富邦金</small>
+        <label for="ticker" class="sr-only">輸入台股代號或名稱</label>
+        <div><input id="ticker" value="2881" maxlength="20" placeholder="股票代號或名稱，例如 2881、富邦金"><button>查詢估值</button></div>
+        <small id="searchHint">可輸入上市／上櫃股票代號或中文簡稱；資料不足時不會硬算。</small>
       </form>
     </section>
 
@@ -95,6 +95,6 @@
       </article>
     </section>
   </main>
-  <script src="/static/app.js?v=2.8" defer></script>
+  <script src="/static/app.js?v=2.9" defer></script>
 </body>
 </html>

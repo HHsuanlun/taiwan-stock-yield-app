@@ -37,7 +37,7 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
     else:
         bear_eps = overrides.get("forecast_eps_low") or forecast["analyst_eps_low"]
         bull_eps = overrides.get("forecast_eps_high") or forecast["analyst_eps_high"]
-        eps_source = "分析師 EPS Low／Median／High"
+        eps_source = "公告口徑 EPS 與歷史趨勢三情境" if forecast.get("data_method") else "分析師 EPS Low／Median／High"
 
     bps = overrides.get("forecast_bps") or forecast["forecast_bps"]
     pe_weights = (
@@ -197,9 +197,9 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             "forecast_eps_low": round(bear_eps, 2),
             "forecast_eps_high": round(bull_eps, 2),
             "eps_source": eps_source,
-            "forecast_method": "優先採分析師 Low／Median／High，不以固定百分比製造情境",
+            "forecast_method": "依最新公告口徑 EPS 與近年趨勢、波動度自動產生 Low／Base／High" if forecast.get("data_method") else "優先採分析師 Low／Median／High，不以固定百分比製造情境",
             "forecast_bps": bps,
-            "bps_method": "2026 上半年普通股每股淨值 83.7；BPS 為期末存量，不作年化",
+            "bps_method": f"截至 {forecast['as_of']} 的市場公告口徑 BPS（同日股價÷P/B）；BPS 為期末存量，不作年化" if forecast.get("data_method") else "2026 上半年普通股每股淨值 83.7；BPS 為期末存量，不作年化",
             "adjusted_bps_reference": forecast["adjusted_bps"],
             "current_pb": round(current_pb, 2),
             "adjusted_current_pb": round(pb["adjusted"]["current_pb"], 2),
@@ -276,13 +276,14 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             "required_eps": round(required_eps, 2),
             "premium_to_fair_pe_pct": round((current_price / base_eps / base_pe - 1) * 100, 2),
             "safety_margin_pct": round((1 - current_price / fair_value) * 100, 2),
-            "eps_basis": "2026 年分析師預估 EPS（可手動覆寫中位數）",
+            "eps_basis": "最新公告口徑 EPS 經歷史趨勢正常化（可手動覆寫中位數）" if forecast.get("data_method") else "2026 年分析師預估 EPS（可手動覆寫中位數）",
         },
-        "source_notes": [
+        "source_notes": ([
+            {"name": f"{snapshot.get('price_source', '固定測試資料')} 股價", "as_of": snapshot["as_of"], "note": f"參考股價 NT${current_price:.2f}"},
+            {"name": "免費公開資料估值管線", "as_of": forecast["as_of"], "note": forecast["data_method"]},
+        ] if forecast.get("data_method") else [
             {"name": "富邦金控股價資訊", "as_of": snapshot["as_of"], "note": "參考股價 NT$150.50"},
-            {"name": "Golden test fixture", "as_of": forecast["as_of"], "note": "分析師 EPS Low 9.94／Median 10.95／High 11.86"},
-            {"name": "富邦金控 2026 上半年財務數字", "as_of": "2026-06-30", "note": "普通股每股淨值 83.7 元；調整後每股淨值 109.3 元"},
-            {"name": "Golden test fixture", "as_of": forecast["as_of"], "note": "歷史 EPS、P/E 與分析師預估用於驗證演算法與介面"},
-        ],
-        "model_version": "tw-valuation-mvp-2.6",
+            {"name": "Golden test fixture", "as_of": forecast["as_of"], "note": "歷史 EPS、P/E、BPS 與預估資料用於演算法驗證"},
+        ]),
+        "model_version": "tw-valuation-mvp-2.7",
     }

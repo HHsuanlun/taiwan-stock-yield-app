@@ -8,12 +8,23 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from backend.data.providers import FixtureProvider
+from backend.data.providers import FixtureProvider, LiveStockProvider
 from backend.valuation.valuation_engine import calculate
 
 ROOT = Path(__file__).resolve().parent
 FRONTEND = ROOT / "frontend"
-PROVIDER = FixtureProvider()
+PROVIDER = LiveStockProvider()
+FIXTURE = FixtureProvider()
+
+
+def load_stock(query):
+    ticker = PROVIDER.resolve(str(query))
+    try:
+        return ticker, PROVIDER.get_snapshot(ticker), PROVIDER.get_history(ticker), PROVIDER.get_forecasts(ticker)
+    except Exception:
+        if ticker == "2881":
+            return ticker, FIXTURE.get_snapshot(ticker), FIXTURE.get_history(ticker), FIXTURE.get_forecasts(ticker)
+        raise
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -40,12 +51,15 @@ class Handler(SimpleHTTPRequestHandler):
         if path.startswith("/static/"):
             self.path = path.removeprefix("/static")
             return super().do_GET()
-        if path == "/api/stocks/2881/snapshot":
-            return self.send_json(PROVIDER.get_snapshot("2881"))
-        if path == "/api/stocks/2881/history":
-            return self.send_json(PROVIDER.get_history("2881"))
-        if path == "/api/stocks/2881/valuation":
-            return self.send_json(self.valuation({}))
+        if path.startswith("/api/stocks/"):
+            parts = path.strip("/").split("/")
+            try:
+                _, snapshot, history, forecast = load_stock(parts[2])
+                if parts[3] == "snapshot": return self.send_json(snapshot)
+                if parts[3] == "history": return self.send_json(history)
+                if parts[3] == "valuation": return self.send_json(calculate(snapshot, history, forecast, {}))
+            except Exception as exc:
+                return self.send_json({"detail": str(exc)}, 422)
         if path.startswith("/api/"):
             return self.send_json({"detail": "MVP 目前僅提供 2881 富邦金固定測試資料"}, 404)
         return super().do_GET()
@@ -56,18 +70,15 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             size = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(size) or b"{}")
-            if str(payload.get("ticker", "2881")) != "2881":
-                return self.send_json({"detail": "MVP 目前僅提供 2881 富邦金固定測試資料"}, 404)
             return self.send_json(self.valuation(payload))
         except (ValueError, json.JSONDecodeError) as exc:
             return self.send_json({"detail": str(exc)}, 400)
 
     @staticmethod
     def valuation(overrides):
+        _, snapshot, history, forecast = load_stock(overrides.get("ticker", "2881"))
         return calculate(
-            PROVIDER.get_snapshot("2881"),
-            PROVIDER.get_history("2881"),
-            PROVIDER.get_forecasts("2881"),
+            snapshot, history, forecast,
             overrides,
         )
 
