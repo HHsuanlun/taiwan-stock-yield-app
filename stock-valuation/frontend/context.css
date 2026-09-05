@@ -97,6 +97,13 @@
   line-height: 1.45;
 }
 
+.model-stack {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  align-content: start;
+}
+
 @media (max-width: 700px) {
   html, body { max-width: 100%; overflow-x: hidden; }
   main { padding-top: 18px; padding-bottom: 32px; }
@@ -106,6 +113,7 @@
   .scenario-grid,
   .content-grid,
   .model-grid,
+  .model-stack,
   .panel,
   .model-card,
   .history-panel,
