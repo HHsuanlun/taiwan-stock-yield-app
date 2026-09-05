@@ -29,12 +29,12 @@
       </div>
 
       <div class="scenario-grid">
-        <article class="scenario bear"><span>保守情境</span><strong id="bearValue">—</strong><small id="bearInputs">—</small></article>
-        <article class="scenario base"><span>中性情境</span><strong id="fairValue">—</strong><small id="baseInputs">—</small><em>P/E 中性組合</em></article>
-        <article class="scenario bull"><span>樂觀情境</span><strong id="bullValue">—</strong><small id="bullInputs">—</small></article>
+        <article class="scenario bear"><span>保守情境</span><strong id="bearValue">—</strong><small id="bearInputs">—</small><small class="scenario-weight" id="bearWeight">—</small></article>
+        <article class="scenario base"><span>中性情境</span><strong id="fairValue">—</strong><small id="baseInputs">—</small><small class="scenario-weight" id="baseWeight">—</small><em>綜合中性估值</em></article>
+        <article class="scenario bull"><span>樂觀情境</span><strong id="bullValue">—</strong><small id="bullInputs">—</small><small class="scenario-weight" id="bullWeight">—</small></article>
         <article class="upside"><span>相對 Primary 合理價</span><strong id="upside">—</strong><small><b id="classification">—</b> · 模型信心 <b id="confidence">—</b></small></article>
       </div>
-      <p class="scenario-note">三個情境摘要為對角線的 EPS × P/E 組合；綜合合理價另以 P/E 與 P/B 權重計算。</p>
+      <p class="scenario-note">三個情境均以 P/E 與 Traditional P/B 的對應情境價加權；預設權重與 Primary／可驗證資料基礎合理價完全一致。</p>
 
       <aside class="panel assumptions">
           <div class="panel-head"><div><p class="eyebrow">MANUAL OVERRIDE</p><h3>調整核心假設</h3></div><button id="reset" class="text-button" type="button">恢復預設</button></div>
@@ -44,7 +44,7 @@
           <p id="bpsMethod" class="formula">2026 上半年普通股每股淨值 83.7；BPS 為期末存量，不作年化</p>
           <div class="weight-title"><span>綜合模型權重</span><output id="weightOut">依 Primary 模型計算</output></div>
           <input id="peWeight" type="range" min="0" max="100" step="0.1" value="50" aria-label="P/E 模型權重">
-          <p class="formula">合理價 = P/E 目標價 × 權重 + P/B 目標價 × 權重</p>
+          <p class="formula">預設權重會依每檔股票的 P/E 與 P/B 模型信心分數自動計算；移動滑桿後才改用手動權重。</p>
       </aside>
 
       <div class="model-grid">
@@ -91,6 +91,6 @@
       </article>
     </section>
   </main>
-  <script src="/static/app.js?v=2.4" defer></script>
+  <script src="/static/app.js?v=2.5" defer></script>
 </body>
 </html>

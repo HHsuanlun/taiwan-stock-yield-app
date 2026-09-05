@@ -96,6 +96,12 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
     bear_price = bear_eps * bear_pe
     base_price = base_eps * base_pe
     bull_price = bull_eps * bull_pe
+    pe_scenario_prices = {"bear": bear_price, "base": base_price, "bull": bull_price}
+    pb_scenario_prices = pb["traditional"]["target_prices"]
+    composite_scenario_prices = {
+        name: pe_scenario_prices[name] * pe_weight + pb_scenario_prices[name] * pb_weight
+        for name in ("bear", "base", "bull")
+    }
     current_price = snapshot["current_price"]
     upside = (fair_value / current_price - 1) * 100
     price_to_fair = current_price / fair_value
@@ -132,8 +138,8 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             "expanded_includes_provisional": adjusted["status"] == "provisional",
             "expanded_weights": {key: round(value, 3) for key, value in expanded_weights.items()},
         },
-        "bear_value": round(bear_price, 2),
-        "bull_value": round(bull_price, 2),
+        "bear_value": round(composite_scenario_prices["bear"], 2),
+        "bull_value": round(composite_scenario_prices["bull"], 2),
         "upside_pct": round(upside, 2),
         "implied_forward_pe": round(current_price / base_eps, 2),
         "classification": classify(price_to_fair),
@@ -204,9 +210,20 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             "pe_reference_weights": [round(v, 3) for v in pe["normalized_weights"]],
             "model_weights": {"pe": round(pe_weight, 3), "pb": round(pb_weight, 3)},
             "scenarios": {
-                "bear": {"eps": round(bear_eps, 2), "pe": round(bear_pe, 2)},
-                "base": {"eps": round(base_eps, 2), "pe": round(base_pe, 2)},
-                "bull": {"eps": round(bull_eps, 2), "pe": round(bull_pe, 2)},
+                name: {
+                    "eps": round(eps, 2),
+                    "pe": round(pe_multiple, 2),
+                    "bps": pb["bps_scenarios"][name],
+                    "pb": pb["pb_scenarios"][name],
+                    "pe_value": round(pe_scenario_prices[name], 2),
+                    "pb_value": round(pb_scenario_prices[name], 2),
+                    "composite_value": round(composite_scenario_prices[name], 2),
+                }
+                for name, eps, pe_multiple in (
+                    ("bear", bear_eps, bear_pe),
+                    ("base", base_eps, base_pe),
+                    ("bull", bull_eps, bull_pe),
+                )
             },
             "valuation_matrix": matrix,
             "required_eps": round(required_eps, 2),
@@ -220,5 +237,5 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             {"name": "富邦金控 2026 上半年財務數字", "as_of": "2026-06-30", "note": "普通股每股淨值 83.7 元；調整後每股淨值 109.3 元"},
             {"name": "Golden test fixture", "as_of": forecast["as_of"], "note": "歷史 EPS、P/E 與分析師預估用於驗證演算法與介面"},
         ],
-        "model_version": "tw-valuation-mvp-2.3",
+        "model_version": "tw-valuation-mvp-2.4",
     }

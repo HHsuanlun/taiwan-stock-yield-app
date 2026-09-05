@@ -53,6 +53,17 @@ class Valuation2881Tests(unittest.TestCase):
         self.assertGreater(scenarios["bull"]["eps"], scenarios["base"]["eps"])
         self.assertGreater(scenarios["bull"]["pe"], scenarios["base"]["pe"])
 
+    def test_three_scenarios_use_primary_model_weights(self):
+        for result in (fixture_result(), fixture_result(pe_weight=0.60, pb_weight=0.40, weights_are_final=True)):
+            weights = result["assumptions"]["model_weights"]
+            scenarios = result["assumptions"]["scenarios"]
+            for name in ("bear", "base", "bull"):
+                expected = scenarios[name]["pe_value"] * weights["pe"] + scenarios[name]["pb_value"] * weights["pb"]
+                self.assertAlmostEqual(scenarios[name]["composite_value"], expected, delta=0.02)
+            self.assertEqual(result["bear_value"], scenarios["bear"]["composite_value"])
+            self.assertEqual(result["fair_value"], scenarios["base"]["composite_value"])
+            self.assertEqual(result["bull_value"], scenarios["bull"]["composite_value"])
+
     def test_matrix_and_reverse_valuation_are_reproducible(self):
         result = fixture_result()
         assumptions = result["assumptions"]
