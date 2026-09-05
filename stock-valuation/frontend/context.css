@@ -1,7 +1,3 @@
-.adjusted-context {
-  border-left: 4px solid #7b8da1;
-}
-
 .status-pill {
   padding: 6px 9px;
   border-radius: 999px;
@@ -63,7 +59,21 @@
 .breakdown dl div { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 12px; }
 .breakdown dd { margin: 0; font-weight: 700; text-align: right; }
 .breakdown dt { color: var(--muted); }
-.provisional-card { border-top: 3px solid #7b8da1; }
+.model-details { margin-top: 16px; }
+.model-details summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid #b8c7d8;
+  border-radius: 6px;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style-position: inside;
+}
+.model-details[open] summary { margin-bottom: 2px; }
 
 .warning-note {
   margin: 12px 0 0;
@@ -121,7 +131,6 @@
   .price { width: 100%; margin-left: 0; text-align: left; }
   .company-row h2 { font-size: 21px; }
   .panel, .model-card { padding: 14px; }
-  .adjusted-context { padding-left: 12px; }
   .context-grid > div { padding: 11px; }
   .context-grid strong { font-size: 17px; }
   .search div { display: grid; grid-template-columns: 1fr; }
