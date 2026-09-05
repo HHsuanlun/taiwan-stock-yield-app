@@ -3,7 +3,7 @@ let latest;
 let userWeightOverride=false;
 let userCoreOverride=false;
 
-function money(value) { return Number(value).toFixed(1); }
+function money(value) { return Number(value).toFixed(2); }
 function setText(id, value) { const element=$(id); if(element) element.textContent=value; }
 
 function drawScatter(data) {
@@ -73,6 +73,7 @@ async function calculate() {
 function syncControls(){setText("epsOut",Number($("eps").value).toFixed(2));setText("bpsOut",Number($("bps").value).toFixed(1));const w=Number($("peWeight").value);setText("weightOut",`P/E ${w.toFixed(1)}% · P/B ${(100-w).toFixed(1)}%`);calculate()}
 let timer;["eps","bps"].forEach(id=>$(id).addEventListener("input",()=>{userCoreOverride=true;clearTimeout(timer);timer=setTimeout(syncControls,80)}));$("peWeight").addEventListener("input",()=>{userWeightOverride=true;clearTimeout(timer);timer=setTimeout(syncControls,80)});
 $("searchForm").addEventListener("submit",e=>{e.preventDefault();userCoreOverride=false;userWeightOverride=false;calculate()});
+document.querySelectorAll("[data-stock]").forEach(button=>button.addEventListener("click",()=>{$("ticker").value=button.dataset.stock;userCoreOverride=false;userWeightOverride=false;calculate()}));
 $("reset").addEventListener("click",()=>{userCoreOverride=false;userWeightOverride=false;calculate()});
 $("toggleTable").addEventListener("click",()=>{const wrap=$("tableWrap");wrap.hidden=!wrap.hidden;$("toggleTable").textContent=wrap.hidden?"展開資料":"收合資料"});
 calculate();

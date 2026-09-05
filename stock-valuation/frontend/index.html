@@ -18,6 +18,9 @@
       <form id="searchForm" class="search">
         <label for="ticker" class="sr-only">輸入台股代號或名稱</label>
         <div><input id="ticker" value="2881" maxlength="20" placeholder="股票代號或名稱，例如 2881、富邦金"><button>查詢估值</button></div>
+        <div class="quick-stocks" aria-label="常用股票">
+          <button type="button" data-stock="2880">華南金</button><button type="button" data-stock="2881">富邦金</button><button type="button" data-stock="2882">國泰金</button><button type="button" data-stock="2884">玉山金</button><button type="button" data-stock="2885">元大金</button><button type="button" data-stock="2886">兆豐金</button><button type="button" data-stock="2887">台新新光金</button><button type="button" data-stock="2891">中信金</button><button type="button" data-stock="2892">第一金</button><button type="button" data-stock="5880">合庫金</button><button type="button" data-stock="2883">凱基金</button><button type="button" data-stock="2890">永豐金</button><button type="button" data-stock="0050">0050 ETF</button><button type="button" data-stock="0056">0056 ETF</button>
+        </div>
         <small id="searchHint">可輸入上市／上櫃股票代號或中文簡稱；資料不足時不會硬算。</small>
       </form>
     </section>
@@ -93,6 +96,6 @@
       </article>
     </section>
   </main>
-  <script src="/static/app.js?v=2.9" defer></script>
+  <script src="/static/app.js?v=3.0" defer></script>
 </body>
 </html>

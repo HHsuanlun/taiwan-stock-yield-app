@@ -26,6 +26,13 @@ class Valuation2881Tests(unittest.TestCase):
         self.assertEqual(provider.resolve("2882"), "2882")
         self.assertEqual(provider.resolve("國泰金"), "2882")
 
+    def test_common_etf_is_resolved_but_not_forced_into_stock_model(self):
+        provider = LiveStockProvider()
+        provider._names = (10**20, {"0050": {"name": "元大台灣50", "industry": "ETF"}})
+        self.assertEqual(provider.resolve("0050"), "0050")
+        with self.assertRaisesRegex(ValueError, "ETF.*不適用"):
+            provider.get_snapshot("0050")
+
     def test_sustainable_pb_formula_functions(self):
         basis = validate_accounting_basis("traditional", "traditional")
         fair_pb = calculate_fair_pb(0.13, 0.03, 0.09)

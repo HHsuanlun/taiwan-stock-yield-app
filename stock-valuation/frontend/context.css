@@ -161,3 +161,7 @@
   footer { display: block; }
   footer b { display: block; margin-bottom: 6px; }
 }
+
+.quick-stocks { display:flex!important; flex-wrap:wrap; gap:7px!important; margin-top:11px; }
+.search .quick-stocks button { width:auto; min-height:34px; padding:6px 10px; border:1px solid var(--line); background:#f4f7fa; color:var(--blue); font-size:12px; }
+.search .quick-stocks button:hover { background:#e7eef6; color:var(--navy); }

@@ -22,6 +22,13 @@ NAME_SOURCES = (
     "https://openapi.twse.com.tw/v1/opendata/t187ap03_L",
     "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O",
 )
+COMMON_STOCKS = {
+    "2880": "華南金", "2881": "富邦金", "2882": "國泰金", "2883": "凱基金",
+    "2884": "玉山金", "2885": "元大金", "2886": "兆豐金", "2887": "台新新光金",
+    "2890": "永豐金", "2891": "中信金", "2892": "第一金", "5880": "合庫金",
+    "0050": "元大台灣50", "0056": "元大高股息",
+}
+ETF_TICKERS = {"0050", "0056"}
 
 
 class LiveStockProvider:
@@ -70,7 +77,7 @@ class LiveStockProvider:
         with self._lock:
             if self._names and time.time() - self._names[0] < 86400:
                 return self._names[1]
-            result: dict[str, dict] = {}
+            result: dict[str, dict] = {code: {"name": name, "industry": "ETF" if code in ETF_TICKERS else "金融"} for code, name in COMMON_STOCKS.items()}
             for url in NAME_SOURCES:
                 try:
                     for row in self._json(url, 8):
@@ -114,6 +121,8 @@ class LiveStockProvider:
         cached = self._cache.get(ticker)
         if cached and time.time() - cached[0] < self.cache_seconds:
             return cached[1]
+        if ticker in ETF_TICKERS:
+            raise ValueError(f"{ticker} 是 ETF，沒有公司 EPS、BPS、ROE，因此不適用本頁的 P/E／P/B 股票估值模型；可至殖利率網站查詢配息與殖利率。")
         start = str(date.today() - timedelta(days=365 * 11))
         prices = self._api("TaiwanStockPrice", ticker, start)
         multiples = self._api("TaiwanStockPER", ticker, start)
