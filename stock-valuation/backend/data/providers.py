@@ -38,6 +38,9 @@ class FixtureProvider:
         "book_value_quality_score": 1.0,
         "book_value_quality_note": "資料不足，MVP 預設假設",
         "accounting_comparability_score": 0.6,
+        "normalized_roe": 0.11,
+        "long_term_growth_rate": 0.03,
+        "roe_pb_confidence": 0.55,
         "recent_quarterly_pe": [12.0, 12.3, 12.5, 12.7, 13.0, 13.2, 13.4, 13.6],
         "recent_pe_source": "recent_8q",
         "fundamental_flags": {

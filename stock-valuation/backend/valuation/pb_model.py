@@ -19,6 +19,17 @@ DEFAULT_PB_CONFIG = {
     "minimum_spread": 0.05,
     "maximum_spread": 0.30,
     "bps_uncertainty": 0.05,
+    "comparability_factor_min": 0.75,
+    "comparability_factor_max": 1.00,
+    "provisional_bridge_weight": 0.40,
+    "provisional_roe_weight": 0.40,
+    "provisional_peer_weight": 0.20,
+    "provisional_confidence_cap": 0.65,
+    "provisional_pb_family_weight_cap": 0.30,
+    "provisional_minimum_spread": 0.10,
+    "growth_rate_min": 0.00,
+    "growth_rate_max": 0.05,
+    "base_required_return": 0.10,
 }
 
 
@@ -30,6 +41,138 @@ def pb_fundamental_score(flags: dict | None) -> float:
         + 0.20 * bool(flags.get("dividend_stable_or_improving"))
         + 0.20 * bool(flags.get("capital_or_asset_quality_acceptable"))
     )
+
+
+def calculate_adjusted_pb_layer(
+    adjusted_bps: float,
+    current_price: float,
+    traditional: dict,
+    forecast: dict,
+    cfg: dict,
+) -> dict:
+    observations = [float(value) for value in forecast.get("adjusted_pb_observations", []) if value and value > 0]
+    observation_count = len(observations)
+    current_pb = current_price / adjusted_bps
+    current_traditional_pb = traditional["current_pb"]
+    common = {
+        "bps": adjusted_bps,
+        "current_pb": current_pb,
+        "historical_observation_count": observation_count,
+        "discount_vs_traditional_pct": (current_pb / current_traditional_pb - 1) * 100,
+        "current_pb_used_as_anchor": False,
+    }
+
+    if observation_count >= 4:
+        fair_pb = median(observations)
+        adjusted_mad = median([abs(value - fair_pb) for value in observations])
+        multiplier = 1.0 if observation_count >= 8 else 1.25
+        adjusted_spread = max(cfg["minimum_spread"], adjusted_mad * 0.8 * multiplier)
+        score = min(0.85 if observation_count >= 8 else 0.65, 0.35 + observation_count * 0.06)
+        status = "active" if observation_count >= 8 else "experimental"
+        return {
+            **common,
+            "status": status,
+            "status_label": "正式 Adjusted P/B 模型" if status == "active" else "實驗性 Adjusted P/B 模型",
+            "anchors": None,
+            "provisional": None,
+            "fair_pb": fair_pb,
+            "fair_value": adjusted_bps * fair_pb,
+            "bear_pb": max(0, fair_pb - adjusted_spread),
+            "bull_pb": fair_pb + adjusted_spread,
+            "confidence": "高" if score >= 0.75 else "中",
+            "confidence_score": score,
+            "included_in_expanded_composite": True,
+            "warning": "此模型使用自身可比較的 Adjusted P/B 觀測資料，未套用 Traditional P/B 倍數。",
+        }
+
+    comparability = traditional["accounting_comparability_score"]
+    factor_range = cfg["comparability_factor_max"] - cfg["comparability_factor_min"]
+    comparability_factor = cfg["comparability_factor_min"] + factor_range * comparability
+    bridge_pb = traditional["final_fair_pb"] * comparability_factor
+    bridge_confidence = (
+        0.40 * comparability
+        + 0.40 * traditional["confidence_score"]
+        + 0.20 * traditional["book_value_quality_score"]
+    )
+
+    normalized_roe = forecast.get("normalized_roe")
+    growth_rate = clamp(
+        float(forecast.get("long_term_growth_rate", 0.03)),
+        cfg["growth_rate_min"],
+        cfg["growth_rate_max"],
+    )
+    required_return = float(forecast.get("required_return", cfg["base_required_return"]))
+    roe_anchor = None
+    if normalized_roe is not None and float(normalized_roe) > growth_rate and required_return > growth_rate:
+        roe_pb = (float(normalized_roe) - growth_rate) / (required_return - growth_rate)
+        roe_anchor = {
+            "pb": roe_pb,
+            "confidence": float(forecast.get("roe_pb_confidence", 0.50)),
+            "normalized_roe": float(normalized_roe),
+            "growth_rate": growth_rate,
+            "required_return": required_return,
+            "required_return_is_assumption": "required_return" not in forecast,
+        }
+
+    peer_anchor = forecast.get("peer_adjusted_pb_anchor")
+    anchors = {
+        "traditional_bridge": {
+            "pb": bridge_pb,
+            "confidence": bridge_confidence,
+            "comparability_factor": comparability_factor,
+            "accounting_comparability_score": comparability,
+        },
+        "roe_based": roe_anchor,
+        "peer": peer_anchor,
+    }
+    candidates = [
+        ("traditional_bridge", anchors["traditional_bridge"], cfg["provisional_bridge_weight"]),
+        ("roe_based", roe_anchor, cfg["provisional_roe_weight"]),
+        ("peer", peer_anchor, cfg["provisional_peer_weight"]),
+    ]
+    available = [(name, anchor, weight) for name, anchor, weight in candidates if anchor is not None]
+    base_total = sum(weight for _, _, weight in available)
+    effective = [(name, anchor, weight / base_total * anchor["confidence"]) for name, anchor, weight in available]
+    effective_total = sum(weight for _, _, weight in effective)
+    normalized_weights = {name: weight / effective_total for name, _, weight in effective}
+    provisional_pb = sum(anchor["pb"] * normalized_weights[name] for name, anchor, _ in effective)
+
+    uncertainty_multiplier = 1.75 if observation_count == 0 else 1.50 if observation_count == 1 else 1.25
+    provisional_spread = max(traditional["spread"], cfg["provisional_minimum_spread"]) * uncertainty_multiplier
+    bear_pb = max(0, provisional_pb - provisional_spread)
+    bull_pb = provisional_pb + provisional_spread
+    anchor_confidence = sum(anchor["confidence"] * normalized_weights[name] for name, anchor, _ in effective)
+    history_uncertainty_factor = 0.75 if observation_count == 0 else 0.85 if observation_count == 1 else 0.90
+    provisional_confidence = min(cfg["provisional_confidence_cap"], anchor_confidence * history_uncertainty_factor)
+    return {
+        **common,
+        "status": "provisional",
+        "status_label": "暫估模型／歷史資料不足",
+        "anchors": anchors,
+        "anchor_weights": normalized_weights,
+        "provisional": {
+            "base_pb": provisional_pb,
+            "spread": provisional_spread,
+            "bear_pb": bear_pb,
+            "bull_pb": bull_pb,
+            "bear_value": adjusted_bps * bear_pb,
+            "base_value": adjusted_bps * provisional_pb,
+            "bull_value": adjusted_bps * bull_pb,
+            "confidence": provisional_confidence,
+            "confidence_cap": cfg["provisional_confidence_cap"],
+            "uncertainty_multiplier": uncertainty_multiplier,
+        },
+        "fair_pb": provisional_pb,
+        "fair_value": adjusted_bps * provisional_pb,
+        "bear_pb": bear_pb,
+        "bull_pb": bull_pb,
+        "confidence": "中低" if provisional_confidence >= 0.50 else "低",
+        "confidence_score": provisional_confidence,
+        "included_in_expanded_composite": True,
+        "included_in_primary_composite": False,
+        "reason": "Insufficient comparable adjusted P/B history; provisional anchors used",
+        "warning": "由於尚未累積足夠可比較的歷史 Adjusted P/B 資料，此估值屬暫估模型，可信度低於正式歷史估值模型。Current Adjusted P/B 僅用於市場比較，沒有進入合理倍數計算。",
+    }
 
 
 def calculate_pb_model(history: list[dict], current_price: float, forecast: dict, config: dict | None = None) -> dict:
@@ -100,18 +243,7 @@ def calculate_pb_model(history: list[dict], current_price: float, forecast: dict
 
     current_traditional_pb = current_price / bps
     current_adjusted_pb = current_price / adjusted_bps
-    adjusted_observations = [
-        float(value) for value in forecast.get("adjusted_pb_observations", []) if value and value > 0
-    ]
-    adjusted_observation_count = len(adjusted_observations) or (1 if adjusted_bps > 0 else 0)
-    adjusted_status = (
-        "active" if adjusted_observation_count >= 8
-        else "experimental" if adjusted_observation_count >= 4
-        else "reference_only" if adjusted_observation_count else "unavailable"
-    )
-    adjusted_discount_vs_traditional_pct = (current_adjusted_pb / current_traditional_pb - 1) * 100
-    return {
-        "traditional": {
+    traditional_model = {
             "historical_median": hist_median, "historical_mean": hist_mean, "recent_median": recent_median,
             "historical_fair_pb": historical_fair, "current_regime_pb": regime_median, "regime_source": forecast.get("recent_pb_source") if regime_available else None,
             "regime_ratio": ratio, "direction": direction, "persistence_score": persistence, "rerating_strength": strength,
@@ -122,17 +254,11 @@ def calculate_pb_model(history: list[dict], current_price: float, forecast: dict
             "premium_to_final_pct": (current_traditional_pb / final_pb - 1) * 100, "required_bps": current_price / final_pb,
             "target_prices": {"bear": bps_scenarios["bear"] * bear_pb, "base": bps * final_pb, "bull": bps_scenarios["bull"] * bull_pb},
             "valuation_matrix": matrix, "confidence_score": confidence_score, "confidence": confidence,
-        },
-        "adjusted": {
-            "bps": adjusted_bps, "current_pb": current_adjusted_pb, "historical_fair_pb": None, "current_regime_pb": None,
-            "final_fair_pb": None, "target_price": None, "confidence": "低", "confidence_score": 0.20,
-            "status": adjusted_status, "historical_observation_count": adjusted_observation_count,
-            "fair_pb": None, "fair_value": None, "included_in_composite": False,
-            "discount_vs_traditional_pct": adjusted_discount_vs_traditional_pct,
-            "reason": "Insufficient comparable adjusted P/B history",
-            "status_label": "補充參考／歷史資料不足",
-            "warning": "調整後 P/B 目前僅作為補充市場參考。由於缺乏足夠可比較的歷史 Adjusted BPS / Adjusted P/B 資料，因此暫不產生獨立合理 P/B 或合理價。模型不會將傳統 P/B 倍數直接套用到調整後 BPS，以避免會計基礎錯配。",
-        },
+        }
+    adjusted_model = calculate_adjusted_pb_layer(adjusted_bps, current_price, traditional_model, forecast, cfg)
+    return {
+        "traditional": traditional_model,
+        "adjusted": adjusted_model,
         "bps_scenarios": {key: round(value, 2) for key, value in bps_scenarios.items()},
         "pb_scenarios": {key: round(value, 3) for key, value in pb_scenarios.items()},
     }

@@ -24,6 +24,7 @@ class ValuationRequest(BaseModel):
     historical_weight: float = Field(0.30, ge=0)
     pe_weight: float = Field(0.50, ge=0)
     pb_weight: float = Field(0.50, ge=0)
+    weights_are_final: bool = False
     pe_spread: float | None = Field(None, ge=0)
 
     @model_validator(mode="after")
@@ -44,6 +45,7 @@ class ValuationResult(BaseModel):
     fair_pb: float
     pb_target_price: float
     fair_value: float
+    composite: dict[str, Any]
     bear_value: float
     bull_value: float
     upside_pct: float

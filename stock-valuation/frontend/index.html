@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="以 P/E、P/B 與情境分析呈現透明、可重現的台股估值。">
   <title>台股估值比較</title>
-  <link rel="stylesheet" href="/static/styles.css">
-  <link rel="stylesheet" href="/static/currency.css">
-  <link rel="stylesheet" href="/static/context.css">
+  <link rel="stylesheet" href="/static/styles.css?v=2.3">
+  <link rel="stylesheet" href="/static/currency.css?v=2.3">
+  <link rel="stylesheet" href="/static/context.css?v=2.3">
 </head>
 <body>
   <header class="topbar"><div class="shell top"><a class="brand" href="/">台股估值比較</a><span class="sub">P/E＋P/B／情境合理價</span></div></header>
@@ -48,8 +48,8 @@
           <p id="epsMethod" class="formula">分析師 Low 9.94／Median 10.95／High 11.86</p>
           <label>預估每股淨值 BPS <output id="bpsOut">83.7</output><input id="bps" type="range" min="50" max="120" step="0.1" value="83.7"></label>
           <p id="bpsMethod" class="formula">2026 上半年普通股每股淨值 83.7；BPS 為期末存量，不作年化</p>
-          <div class="weight-title"><span>綜合模型權重</span><output id="weightOut">P/E 50% · P/B 50%</output></div>
-          <input id="peWeight" type="range" min="0" max="100" step="5" value="50" aria-label="P/E 模型權重">
+          <div class="weight-title"><span>綜合模型權重</span><output id="weightOut">依 Primary 模型計算</output></div>
+          <input id="peWeight" type="range" min="0" max="100" step="0.1" value="50" aria-label="P/E 模型權重">
           <p class="formula">合理價 = P/E 目標價 × 權重 + P/B 目標價 × 權重</p>
         </aside>
       </div>
@@ -60,8 +60,9 @@
       </div>
 
       <article class="panel adjusted-context">
-        <div class="panel-head"><div><p class="eyebrow">SUPPLEMENTARY ADJUSTED BOOK VALUE ANALYSIS</p><h3>調整後淨值估值脈絡</h3></div><span id="adjustedPbStatus" class="status-pill">—</span></div>
-        <div class="context-grid"><div><span>Adjusted BPS</span><strong id="adjustedBps">—</strong></div><div><span>目前 Adjusted P/B</span><strong id="adjustedCurrentPb">—</strong></div><div><span>目前 Traditional P/B</span><strong id="contextTraditionalPb">—</strong></div><div><span>相對 Traditional P/B 差異</span><strong id="adjustedPbDifference">—</strong></div><div><span>獨立 Adjusted Fair P/B</span><strong id="adjustedFairPb">資料不足</strong></div><div><span>是否納入 Primary 合理價</span><strong id="adjustedIncluded">否</strong></div></div>
+        <div class="panel-head"><div><p class="eyebrow">PROVISIONAL ADJUSTED P/B VALUATION</p><h3>Adjusted Book Value — 暫估估值</h3></div><span id="adjustedPbStatus" class="status-pill">—</span></div>
+        <div class="context-grid"><div><span>Adjusted BPS</span><strong id="adjustedBps">—</strong></div><div><span>目前 Adjusted P/B</span><strong id="adjustedCurrentPb">—</strong></div><div><span>目前 Traditional P/B</span><strong id="contextTraditionalPb">—</strong></div><div><span>暫估合理 P/B</span><strong id="adjustedFairPb">—</strong></div><div><span>暫估 P/B 區間</span><strong id="adjustedPbRange">—</strong></div><div><span>暫估合理價</span><strong id="adjustedFairValue">—</strong></div><div><span>暫估價格區間</span><strong id="adjustedValueRange">—</strong></div><div><span>暫估信心</span><strong id="adjustedConfidence">—</strong></div><div><span>是否納入 Primary 合理價</span><strong id="adjustedIncluded">否</strong></div></div>
+        <details class="breakdown"><summary>展開計算依據</summary><dl><div><dt>Traditional P/B Bridge</dt><dd id="bridgePb">—</dd></div><div><dt>Accounting Comparability／Factor</dt><dd id="comparabilityBridge">—</dd></div><div><dt>ROE-based P/B</dt><dd id="roeBasedPb">—</dd></div><div><dt>ROE／g／r</dt><dd id="roeInputs">—</dd></div><div><dt>Peer Anchor</dt><dd id="peerAnchor">—</dd></div><div><dt>Anchor 權重</dt><dd id="anchorWeights">—</dd></div><div><dt>Adjusted P/B 歷史</dt><dd id="adjustedHistoryCount">—</dd></div></dl></details>
         <p id="adjustedInterpretation" class="context-summary">—</p>
         <p id="adjustedWarning" class="warning-note">—</p>
       </article>
@@ -80,6 +81,7 @@
 
       <div class="model-grid">
         <article class="model-card"><p>Primary／可驗證資料基礎合理價</p><strong id="compositeValue">—</strong><p class="primary-note">此合理價僅使用目前具有可比較歷史基礎的 P/E 與 Traditional P/B 模型；尚未納入 Adjusted P/B 合理價。</p><dl><div><dt>P/E 估值</dt><dd id="peFairValue">—</dd></div><div><dt>Traditional P/B 估值</dt><dd id="pbFairValue">—</dd></div><div><dt>模型權重</dt><dd id="modelWeights">—</dd></div><div><dt>安全邊際</dt><dd id="safetyMargin">—</dd></div></dl></article>
+        <article class="model-card provisional-card"><p>Expanded／含暫估模型合理價</p><strong id="expandedCompositeValue">—</strong><p class="primary-note">納入低權重 Provisional Adjusted P/B；不是 Primary 合理價，暫估模型整體權重上限為 15%。</p><dl><div><dt>P/B Family 合理價</dt><dd id="expandedPbFamily">—</dd></div><div><dt>P/E 權重</dt><dd id="expandedPeWeight">—</dd></div><div><dt>Traditional P/B 權重</dt><dd id="expandedTraditionalWeight">—</dd></div><div><dt>Provisional Adjusted P/B 權重</dt><dd id="expandedAdjustedWeight">—</dd></div></dl></article>
         <article class="model-card"><p>目前股價反推</p><strong class="plain-value" id="requiredEps">—</strong><dl><div><dt>目前股價</dt><dd id="reversePrice">—</dd></div><div><dt>合理 P/E</dt><dd id="reversePe">—</dd></div><div><dt>所需 EPS</dt><dd id="reverseEps">—</dd></div><div><dt>模型版本</dt><dd id="version">—</dd></div></dl></article>
       </div>
 
@@ -90,6 +92,6 @@
       </article>
     </section>
   </main>
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v=2.3" defer></script>
 </body>
 </html>

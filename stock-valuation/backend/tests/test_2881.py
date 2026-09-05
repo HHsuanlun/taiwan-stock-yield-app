@@ -30,6 +30,11 @@ class Valuation2881Tests(unittest.TestCase):
         self.assertNotEqual(changed["pe_target_price"], baseline["pe_target_price"])
         self.assertNotEqual(changed["fair_value"], baseline["fair_value"])
 
+    def test_final_weight_override_matches_primary_display(self):
+        result = fixture_result(pe_weight=0.60, pb_weight=0.40, weights_are_final=True)
+        self.assertAlmostEqual(result["assumptions"]["model_weights"]["pe"], 0.60)
+        self.assertAlmostEqual(result["assumptions"]["model_weights"]["pb"], 0.40)
+
     def test_default_eps_uses_analyst_low_median_high(self):
         result = fixture_result()
         self.assertEqual(result["assumptions"]["forecast_eps_low"], 9.94)
@@ -136,14 +141,13 @@ class Valuation2881Tests(unittest.TestCase):
 
     def test_adjusted_bps_is_not_multiplied_by_traditional_pb(self):
         provider = FixtureProvider()
-        adjusted = calculate_pb_model(provider.get_history("2881"), 150.5, provider.get_forecasts("2881"))["adjusted"]
-        self.assertIsNone(adjusted["final_fair_pb"])
-        self.assertIsNone(adjusted["target_price"])
-        self.assertEqual(adjusted["confidence"], "低")
-        self.assertEqual(adjusted["status"], "reference_only")
-        self.assertEqual(adjusted["historical_observation_count"], 1)
-        self.assertIsNone(adjusted["fair_value"])
-        self.assertFalse(adjusted["included_in_composite"])
+        model = calculate_pb_model(provider.get_history("2881"), 150.5, provider.get_forecasts("2881"))
+        adjusted, traditional = model["adjusted"], model["traditional"]
+        self.assertNotEqual(adjusted["fair_pb"], traditional["final_fair_pb"])
+        self.assertNotEqual(adjusted["fair_value"], 109.3 * traditional["final_fair_pb"])
+        self.assertEqual(adjusted["status"], "provisional")
+        self.assertEqual(adjusted["historical_observation_count"], 0)
+        self.assertFalse(adjusted["included_in_primary_composite"])
 
     def test_primary_composite_excludes_adjusted_pb(self):
         result = fixture_result()
@@ -151,6 +155,49 @@ class Valuation2881Tests(unittest.TestCase):
         self.assertFalse(result["composite"]["includes_adjusted_pb"])
         adjusted = result["assumptions"]["pb_model"]["adjusted"]
         self.assertAlmostEqual(adjusted["discount_vs_traditional_pct"], -23.33, delta=0.1)
+
+    def test_bridge_pb_applies_accounting_comparability_discount(self):
+        provider = FixtureProvider()
+        model = calculate_pb_model(provider.get_history("2881"), 150.5, provider.get_forecasts("2881"))
+        bridge = model["adjusted"]["anchors"]["traditional_bridge"]
+        self.assertAlmostEqual(bridge["comparability_factor"], 0.90)
+        self.assertAlmostEqual(bridge["pb"], model["traditional"]["final_fair_pb"] * 0.90)
+
+    def test_current_adjusted_pb_not_used_as_fair_anchor(self):
+        provider = FixtureProvider()
+        forecast = provider.get_forecasts("2881")
+        first = calculate_pb_model(provider.get_history("2881"), 150.5, forecast)["adjusted"]
+        second = calculate_pb_model(provider.get_history("2881"), 300.0, forecast)["adjusted"]
+        self.assertEqual(first["fair_pb"], second["fair_pb"])
+        self.assertFalse(first["current_pb_used_as_anchor"])
+
+    def test_peer_missing_reweights_remaining_anchors(self):
+        adjusted = fixture_result()["assumptions"]["pb_model"]["adjusted"]
+        self.assertIsNone(adjusted["anchors"]["peer"])
+        self.assertAlmostEqual(sum(adjusted["anchor_weights"].values()), 1.0)
+        self.assertNotIn("peer", adjusted["anchor_weights"])
+
+    def test_provisional_confidence_capped(self):
+        adjusted = fixture_result()["assumptions"]["pb_model"]["adjusted"]
+        self.assertLessEqual(adjusted["confidence_score"], 0.65)
+
+    def test_provisional_weight_capped_in_composite(self):
+        weights = fixture_result()["composite"]["expanded_weights"]
+        self.assertLessEqual(weights["adjusted_pb"], 0.15)
+
+    def test_active_adjusted_model_replaces_provisional_model(self):
+        provider = FixtureProvider()
+        forecast = provider.get_forecasts("2881")
+        forecast["adjusted_pb_observations"] = [1.10, 1.12, 1.15, 1.17, 1.18, 1.20, 1.22, 1.24]
+        adjusted = calculate_pb_model(provider.get_history("2881"), 150.5, forecast)["adjusted"]
+        self.assertEqual(adjusted["status"], "active")
+        self.assertIsNone(adjusted["provisional"])
+        self.assertIsNone(adjusted["anchors"])
+
+    def test_no_double_counting_traditional_and_adjusted_pb(self):
+        weights = fixture_result()["composite"]["expanded_weights"]
+        self.assertAlmostEqual(sum(weights.values()), 1.0, places=3)
+        self.assertLess(weights["adjusted_pb"], weights["traditional_pb"])
 
     def test_pb_matrix_and_spread(self):
         provider = FixtureProvider()

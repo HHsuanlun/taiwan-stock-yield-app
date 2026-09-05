@@ -66,11 +66,32 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
     fair_pb = pb["traditional"]["final_fair_pb"]
     pe_price = base_eps * base_pe
     pb_price = bps * fair_pb
-    pe_weight = overrides.get("pe_weight", 0.50) * pe["confidence_score"]
-    pb_weight = overrides.get("pb_weight", 0.50) * pb["traditional"]["confidence_score"]
-    total = pe_weight + pb_weight
-    pe_weight, pb_weight = pe_weight / total, pb_weight / total
+    if overrides.get("weights_are_final"):
+        pe_weight = float(overrides.get("pe_weight", 0.50))
+        pb_weight = 1 - pe_weight
+    else:
+        pe_weight = overrides.get("pe_weight", 0.50) * pe["confidence_score"]
+        pb_weight = overrides.get("pb_weight", 0.50) * pb["traditional"]["confidence_score"]
+        total = pe_weight + pb_weight
+        pe_weight, pb_weight = pe_weight / total, pb_weight / total
     fair_value = pe_price * pe_weight + pb_price * pb_weight
+
+    adjusted = pb["adjusted"]
+    adjusted_family_cap = 0.30 if adjusted["status"] == "provisional" else 0.40
+    adjusted_family_raw = adjusted_family_cap * adjusted["confidence_score"]
+    traditional_family_raw = (1 - adjusted_family_cap) * pb["traditional"]["confidence_score"]
+    pb_family_total = traditional_family_raw + adjusted_family_raw
+    adjusted_family_weight = adjusted_family_raw / pb_family_total if pb_family_total else 0
+    if pb_weight > 0:
+        adjusted_family_weight = min(adjusted_family_weight, 0.15 / pb_weight)
+    traditional_family_weight = 1 - adjusted_family_weight
+    expanded_pb_value = pb_price * traditional_family_weight + adjusted["fair_value"] * adjusted_family_weight
+    expanded_fair_value = pe_price * pe_weight + expanded_pb_value * pb_weight
+    expanded_weights = {
+        "pe": pe_weight,
+        "traditional_pb": pb_weight * traditional_family_weight,
+        "adjusted_pb": pb_weight * adjusted_family_weight,
+    }
 
     bear_price = bear_eps * bear_pe
     base_price = base_eps * base_pe
@@ -106,6 +127,10 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             "includes_adjusted_pb": False,
             "label": "可驗證資料基礎合理價",
             "basis": "僅使用具有可比較歷史基礎的 P/E 與 Traditional P/B 模型",
+            "expanded_fair_value": round(expanded_fair_value, 2),
+            "expanded_pb_family_value": round(expanded_pb_value, 2),
+            "expanded_includes_provisional": adjusted["status"] == "provisional",
+            "expanded_weights": {key: round(value, 3) for key, value in expanded_weights.items()},
         },
         "bear_value": round(bear_price, 2),
         "bull_value": round(bull_price, 2),
@@ -195,5 +220,5 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             {"name": "富邦金控 2026 上半年財務數字", "as_of": "2026-06-30", "note": "普通股每股淨值 83.7 元；調整後每股淨值 109.3 元"},
             {"name": "Golden test fixture", "as_of": forecast["as_of"], "note": "歷史 EPS、P/E 與分析師預估用於驗證演算法與介面"},
         ],
-        "model_version": "tw-valuation-mvp-2.2",
+        "model_version": "tw-valuation-mvp-2.3",
     }
