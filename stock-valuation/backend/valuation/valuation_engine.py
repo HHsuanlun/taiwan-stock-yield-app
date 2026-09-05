@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .pe_model import fair_pe
 from .pb_model import calculate_pb_model
+from .valuation_heat import calculate_valuation_heat
 
 
 def classify(price_to_fair: float) -> str:
@@ -107,6 +108,15 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
     price_to_fair = current_price / fair_value
     required_eps = current_price / base_pe
     current_pb = current_price / bps
+    valuation_heat = calculate_valuation_heat(
+        current_price=current_price,
+        base_forecast_eps=base_eps,
+        historical_fair_pe=pe["historical_fair_pe"],
+        final_fair_pe=base_pe,
+        current_regime_pe=pe["current_regime_pe"],
+        forecast=forecast,
+        history=history,
+    )
 
     eps_rows = [("bear", bear_eps), ("base", base_eps), ("bull", bull_eps)]
     pe_cols = [("bear", bear_pe), ("base", base_pe), ("bull", bull_pe)]
@@ -144,6 +154,7 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
         "implied_forward_pe": round(current_price / base_eps, 2),
         "classification": classify(price_to_fair),
         "confidence": confidence(pe),
+        "valuation_heat": valuation_heat,
         "historical": history,
         "assumptions": {
             "forecast_eps": round(base_eps, 2),
@@ -237,5 +248,5 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             {"name": "富邦金控 2026 上半年財務數字", "as_of": "2026-06-30", "note": "普通股每股淨值 83.7 元；調整後每股淨值 109.3 元"},
             {"name": "Golden test fixture", "as_of": forecast["as_of"], "note": "歷史 EPS、P/E 與分析師預估用於驗證演算法與介面"},
         ],
-        "model_version": "tw-valuation-mvp-2.4",
+        "model_version": "tw-valuation-mvp-2.5",
     }

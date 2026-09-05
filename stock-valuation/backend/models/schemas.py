@@ -52,6 +52,7 @@ class ValuationResult(BaseModel):
     implied_forward_pe: float
     classification: str
     confidence: str
+    valuation_heat: dict[str, Any]
     historical: list[HistoricalPoint]
     assumptions: dict[str, Any]
     source_notes: list[dict[str, str]]

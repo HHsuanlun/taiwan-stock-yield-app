@@ -72,6 +72,23 @@ class Valuation2881Tests(unittest.TestCase):
         self.assertEqual(center, result["pe_target_price"])
         self.assertAlmostEqual(assumptions["required_eps"] * result["fair_pe"], result["current_price"], delta=0.1)
 
+    def test_valuation_heat_uses_forward_pe_and_final_fair_pe(self):
+        result = fixture_result()
+        heat = result["valuation_heat"]
+        self.assertAlmostEqual(heat["forward_pe"]["fy1"], result["current_price"] / result["assumptions"]["forecast_eps"])
+        self.assertAlmostEqual(heat["pe_overheat_ratio"], heat["forward_pe"]["fy1"] / result["fair_pe"], delta=0.001)
+        self.assertAlmostEqual(heat["required_eps_gap"], heat["required_eps"] / heat["base_forecast_eps"] - 1)
+        self.assertGreaterEqual(heat["heat_score"], 0)
+        self.assertLessEqual(heat["heat_score"], 100)
+
+    def test_valuation_heat_does_not_invent_missing_forecasts(self):
+        heat = fixture_result()["valuation_heat"]
+        self.assertIsNone(heat["trailing_pe"])
+        self.assertNotIn("fy2", heat["forward_pe"])
+        self.assertNotIn("fy3", heat["forward_pe"])
+        self.assertEqual(heat["priced_in_horizon"], "資料不足")
+        self.assertIn("TTM EPS", heat["data_limitations"])
+
     def test_pe_scenarios_use_mad_and_percentile_breakout_bounds(self):
         provider = FixtureProvider()
         result = fair_pe(provider.get_history("2881"), 10.95, (0.25, 0.45, 0.30))
