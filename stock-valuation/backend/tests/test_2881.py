@@ -56,6 +56,30 @@ class Valuation2881Tests(unittest.TestCase):
         baseline = fixture_result()
         changed = fixture_result(forecast_eps=13.0)
         self.assertEqual(baseline["fair_pb"], changed["fair_pb"])
+
+    def test_confirmed_peer_regime_adjusts_all_pb_scenarios_with_cap(self):
+        provider = FixtureProvider()
+        forecast = provider.get_forecasts("2881")
+        forecast["sector_peer_regime"] = {"confirmed": True, "adjustment_factor": 1.10}
+        baseline = fixture_result()
+        adjusted = calculate(provider.get_snapshot("2881"), provider.get_history("2881"), forecast, {})
+        self.assertAlmostEqual(adjusted["fair_pb"], baseline["fair_pb"] * 1.10)
+        for scenario in ("bear", "base", "bull"):
+            self.assertAlmostEqual(adjusted["assumptions"]["pb_model"]["pb_scenarios"][scenario], baseline["assumptions"]["pb_model"]["pb_scenarios"][scenario] * 1.10, delta=0.002)
+        self.assertGreater(adjusted["fair_value"], baseline["fair_value"])
+
+    def test_peer_regime_requires_breadth_and_caps_adjustment(self):
+        provider = LiveStockProvider()
+        provider._peer_pb_series = lambda ticker, start: {
+            "ticker": ticker,
+            "latest": 2.0,
+            "yearly": {year: 1.0 for year in range(2021, 2026)},
+        }
+        regime = provider.peer_regime("2884")
+        self.assertTrue(regime["confirmed"])
+        self.assertEqual(regime["breadth"], 1.0)
+        self.assertEqual(regime["adjustment_factor"], 1.10)
+
     def test_complete_2881_valuation(self):
         result = fixture_result()
         self.assertEqual(result["ticker"], "2881")

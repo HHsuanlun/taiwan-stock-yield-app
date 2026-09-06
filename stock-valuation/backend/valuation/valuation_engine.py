@@ -68,7 +68,16 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
     capital_efficiency = calculate_sustainable_pb(history, snapshot["current_price"], bps, forecast)
     if capital_efficiency.get("fair_pb") is None:
         raise ValueError("Sustainable P/B model lacks basis-consistent data")
-    fair_pb = capital_efficiency["fair_pb"]
+    fundamental_fair_pb = capital_efficiency["fair_pb"]
+    peer_regime = forecast.get("sector_peer_regime")
+    peer_factor = float(peer_regime["adjustment_factor"]) if peer_regime and peer_regime.get("confirmed") else 1.0
+    fair_pb = fundamental_fair_pb * peer_factor
+    capital_efficiency["fundamental_fair_pb"] = fundamental_fair_pb
+    capital_efficiency["sector_peer_regime"] = peer_regime
+    capital_efficiency["peer_adjustment_factor"] = peer_factor
+    capital_efficiency["fair_pb"] = fair_pb
+    capital_efficiency["fair_value"] = bps * fair_pb
+    capital_efficiency["sensitivity_pb"] = {name: value * peer_factor for name, value in capital_efficiency["sensitivity_pb"].items()}
     capital_confidence_score = 0.65 if capital_efficiency["confidence"] == "Medium" else 0.45
     traditional = pb["traditional"]
     traditional.update({
@@ -176,7 +185,7 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             "primary_fair_value": round(fair_value, 2),
             "includes_adjusted_pb": False,
             "label": "可驗證資料基礎合理價",
-            "basis": "僅使用具有可比較歷史基礎的 P/E 與 Traditional P/B 模型",
+            "basis": "使用 P/E 與 Sustainable ROE P/B；大型金融同業 Regime 確認後，僅對 P/B 三情境作受限校準",
             "expanded_fair_value": round(expanded_fair_value, 2),
             "expanded_pb_family_value": round(expanded_pb_value, 2),
             "expanded_includes_provisional": adjusted["status"] == "provisional",
@@ -285,5 +294,5 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             {"name": "富邦金控股價資訊", "as_of": snapshot["as_of"], "note": "參考股價 NT$150.50"},
             {"name": "Golden test fixture", "as_of": forecast["as_of"], "note": "歷史 EPS、P/E、BPS 與預估資料用於演算法驗證"},
         ]),
-        "model_version": "tw-valuation-mvp-2.7",
+        "model_version": "tw-valuation-mvp-2.8",
     }

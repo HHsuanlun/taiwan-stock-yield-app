@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
+from statistics import median
 from threading import Lock
 from typing import Protocol
 from urllib.parse import urlencode
@@ -29,6 +31,12 @@ COMMON_STOCKS = {
     "0050": "元大台灣50", "0056": "元大高股息",
 }
 ETF_TICKERS = {"0050", "0056"}
+PEER_GROUPS = {
+    "bank": ("2880", "2884", "2886", "2887", "2890", "2891", "2892", "5880"),
+    "insurance": ("2881", "2882"),
+    "securities": ("2883", "2885"),
+}
+PEER_GROUP_BY_TICKER = {ticker: group for group, tickers in PEER_GROUPS.items() for ticker in tickers}
 
 
 class LiveStockProvider:
@@ -38,6 +46,7 @@ class LiveStockProvider:
         self.cache_seconds = cache_seconds
         self._cache: dict[str, tuple[float, dict]] = {}
         self._names: tuple[float, dict[str, dict]] | None = None
+        self._peer_cache: dict[str, tuple[float, dict]] = {}
         self._lock = Lock()
 
     @staticmethod
@@ -117,6 +126,59 @@ class LiveStockProvider:
         except (TypeError, ValueError):
             return None
 
+    def _peer_pb_series(self, ticker: str, start_date: str) -> dict:
+        rows = self._api("TaiwanStockPER", ticker, start_date)
+        yearly = {}
+        latest = None
+        for row in rows:
+            pb = self._positive(row.get("PBR"))
+            if pb:
+                latest = pb
+                yearly[int(row["date"][:4])] = pb
+        return {"ticker": ticker, "latest": latest, "yearly": yearly}
+
+    def peer_regime(self, ticker: str) -> dict | None:
+        group = PEER_GROUP_BY_TICKER.get(ticker)
+        if not group:
+            return None
+        cached = self._peer_cache.get(group)
+        if cached and time.time() - cached[0] < 3600:
+            return cached[1]
+        start = str(date.today() - timedelta(days=365 * 7))
+        series = []
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {pool.submit(self._peer_pb_series, code, start): code for code in PEER_GROUPS[group]}
+            for future in as_completed(futures):
+                try:
+                    series.append(future.result())
+                except Exception:
+                    continue
+        current_values = [item["latest"] for item in series if item["latest"]]
+        years = range(date.today().year - 5, date.today().year)
+        annual_medians = []
+        for year in years:
+            values = [item["yearly"].get(year) for item in series if item["yearly"].get(year)]
+            if values:
+                annual_medians.append(median(values))
+        if len(current_values) < 2 or len(annual_medians) < 3:
+            return None
+        current_median = median(current_values)
+        historical_median = median(annual_medians)
+        ratio = current_median / historical_median if historical_median else 1.0
+        above_history = 0
+        for item in series:
+            history = list(item["yearly"].values())[-5:]
+            if item["latest"] and history:
+                if item["latest"] > median(history):
+                    above_history += 1
+        breadth = above_history / len(series)
+        confirmed = len(series) >= max(2, len(PEER_GROUPS[group]) // 2) and breadth >= 0.60
+        raw_factor = 0.70 + 0.30 * ratio if confirmed else 1.0
+        factor = min(1.10, max(0.90, raw_factor))
+        result = {"group": group, "peer_count": len(series), "current_median_pb": current_median, "historical_5y_median_pb": historical_median, "regime_ratio": ratio, "breadth": breadth, "confirmed": confirmed, "adjustment_factor": factor, "confidence": "Medium" if confirmed else "Low"}
+        self._peer_cache[group] = (time.time(), result)
+        return result
+
     def _load(self, ticker: str) -> dict:
         cached = self._cache.get(ticker)
         if cached and time.time() - cached[0] < self.cache_seconds:
@@ -180,6 +242,7 @@ class LiveStockProvider:
                 "as_of": latest["date"], "data_method": "Yahoo 優先取得最新股價；FinMind 提供歷史股價與 PER/PBR 對齊。EPS=股價/PER，BPS=股價/PBR；預估 EPS 依最新公告口徑與近年趨勢正常化。",
             },
         }
+        bundle["forecast"]["sector_peer_regime"] = self.peer_regime(ticker)
         self._cache[ticker] = (time.time(), bundle)
         return bundle
 
