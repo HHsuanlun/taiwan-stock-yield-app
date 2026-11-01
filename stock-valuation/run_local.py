@@ -33,7 +33,7 @@ def ranking_valuation(ticker):
     return calculate(snapshot, history, forecast, {})
 
 
-RANKING = RankingService(ranking_valuation)
+RANKING = RankingService(ranking_valuation, market_candidate_loader=PROVIDER.market_screen_candidates)
 
 
 class Handler(SimpleHTTPRequestHandler):

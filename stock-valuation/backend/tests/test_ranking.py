@@ -15,8 +15,7 @@ class RankingServiceTests(unittest.TestCase):
         self.assertEqual([row["rank"] for row in ranking["rows"]], [1, 2, 3])
         self.assertEqual(ranking["available"], 3)
         self.assertEqual(ranking["total"], 3)
-        self.assertEqual(ranking["shareholder_earnings_reference"]["ticker"], "2891")
-        self.assertIn("正式 EPS", ranking["shareholder_earnings_reference"]["selection_basis"])
+        self.assertIsNone(ranking["shareholder_earnings_reference"])
 
     def test_ranking_reports_failed_ticker_without_stale_placeholder(self):
         def loader(ticker):
@@ -29,26 +28,30 @@ class RankingServiceTests(unittest.TestCase):
         self.assertEqual(ranking["rows"][0]["ticker"], "2884")
         self.assertEqual(ranking["errors"][0]["ticker"], "2881")
 
-    def test_shareholder_earnings_reference_uses_best_primary_gap_among_suitable_stocks(self):
+    def test_market_reference_uses_best_primary_gap_from_full_model_finalists(self):
         values = {
             "2881": {"ticker": "2881", "company_name": "富邦金", "current_price": 100, "fair_value": 110, "upside_pct": 10, "classification": "合理", "confidence": "中"},
             "2882": {"ticker": "2882", "company_name": "國泰金", "current_price": 60, "fair_value": 75, "upside_pct": 25, "classification": "便宜", "confidence": "中"},
             "2884": {"ticker": "2884", "company_name": "玉山金", "current_price": 30, "fair_value": 45, "upside_pct": 50, "classification": "便宜", "confidence": "中"},
         }
-        ranking = RankingService(values.__getitem__, tickers=tuple(values), cache_seconds=60).get()
+        screen = lambda: {"eligible_total": 900, "as_of": "1151030", "method": "全市場兩階段掃描", "finalists": [{"ticker": "2881"}, {"ticker": "2882"}]}
+        ranking = RankingService(values.__getitem__, tickers=("2884",), cache_seconds=60, market_candidate_loader=screen).get()
         reference = ranking["shareholder_earnings_reference"]
         self.assertEqual(reference["ticker"], "2882")
         self.assertEqual(reference["upside_pct"], 25.0)
+        self.assertEqual(ranking["market_screen"]["eligible_total"], 900)
+        self.assertEqual(ranking["market_screen"]["valued_total"], 2)
 
-    def test_securities_holding_can_join_reference_candidates(self):
+    def test_market_candidate_need_not_be_financial_stock(self):
         values = {
             "2884": {"ticker": "2884", "company_name": "玉山金", "current_price": 30, "fair_value": 45, "upside_pct": 50, "classification": "便宜", "confidence": "中"},
-            "2885": {"ticker": "2885", "company_name": "元大金", "current_price": 40, "fair_value": 44, "upside_pct": 10, "classification": "合理", "confidence": "中"},
+            "1102": {"ticker": "1102", "company_name": "亞泥", "current_price": 40, "fair_value": 52, "upside_pct": 30, "classification": "便宜", "confidence": "中"},
         }
-        ranking = RankingService(values.__getitem__, tickers=tuple(values), cache_seconds=60).get()
+        screen = lambda: {"eligible_total": 800, "as_of": "1151030", "method": "全市場兩階段掃描", "finalists": [{"ticker": "1102"}]}
+        ranking = RankingService(values.__getitem__, tickers=("2884",), cache_seconds=60, market_candidate_loader=screen).get()
         reference = ranking["shareholder_earnings_reference"]
-        self.assertEqual(reference["ticker"], "2885")
-        self.assertIn("證券型", reference["profile"])
+        self.assertEqual(reference["ticker"], "1102")
+        self.assertIn("全台股", reference["profile"])
 
 
 if __name__ == "__main__":

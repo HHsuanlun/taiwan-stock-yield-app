@@ -31,10 +31,10 @@
         <div class="ranking-columns" aria-hidden="true"><span>排名</span><span>股票</span><span>目前股價</span><span>中性合理價</span><span>合理價差</span></div>
         <div id="rankingList" class="ranking-list" aria-live="polite"><p class="ranking-loading">正在計算常用金融股排名…</p></div>
         <article id="shareholderEarningsReference" class="earnings-reference" hidden aria-live="polite">
-          <div><p class="eyebrow">SHAREHOLDER EARNINGS REFERENCE</p><h3>此算法適用參考第一名</h3></div>
+          <div><p class="eyebrow">TAIWAN MARKET MODEL PICK</p><h3>全台股適用模型參考第一名</h3></div>
           <button id="referenceStock" type="button"><strong id="referenceName">—</strong><span id="referenceTicker">—</span></button>
           <div class="reference-value"><span>Primary 合理價差</span><strong id="referenceGap">—</strong></div>
-          <p><b id="referenceProfile">—</b> · <span id="referenceBasis">—</span></p><small id="referenceNote">—</small>
+          <p><b id="referenceProfile">—</b> · <span id="referenceBasis">—</span></p><small><span id="marketCoverage">—</span> · <span id="referenceNote">—</span></small>
         </article>
         <p class="ranking-note">依「中性合理價 ÷ 目前股價 − 1」由高到低排序；正數代表模型合理價高於現價。點選任一股票可直接查看完整估值。ETF 不納入。</p>
       </section>
@@ -111,6 +111,6 @@
       </article>
     </section>
   </main>
-  <script src="/static/app.js?v=3.2" defer></script>
+  <script src="/static/app.js?v=3.3" defer></script>
 </body>
 </html>

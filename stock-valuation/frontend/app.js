@@ -32,6 +32,8 @@ function renderRanking(payload) {
     setText("referenceName",reference.company_name);setText("referenceTicker",reference.ticker);
     setText("referenceGap",`${reference.upside_pct>=0?"+":""}${reference.upside_pct.toFixed(1)}%`);
     setText("referenceProfile",reference.profile);setText("referenceBasis",reference.selection_basis);setText("referenceNote",reference.method_note);
+    const screen=payload.market_screen||{};
+    setText("marketCoverage",`全市場 ${screen.eligible_total||0} 檔符合初篩，${screen.valued_total||0} 檔完成十年模型精算`);
     $("referenceStock").onclick=()=>{$("ticker").value=reference.ticker;userCoreOverride=false;userWeightOverride=false;calculate();};
   }else{referenceCard.hidden=true;}
   if(latest)syncRankingActive(latest.ticker);

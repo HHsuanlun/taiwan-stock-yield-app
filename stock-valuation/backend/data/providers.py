@@ -24,6 +24,10 @@ NAME_SOURCES = (
     "https://openapi.twse.com.tw/v1/opendata/t187ap03_L",
     "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O",
 )
+MARKET_MULTIPLE_SOURCES = (
+    "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+    "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis",
+)
 COMMON_STOCKS = {
     "2880": "華南金", "2881": "富邦金", "2882": "國泰金", "2883": "凱基金",
     "2884": "玉山金", "2885": "元大金", "2886": "兆豐金", "2887": "台新新光金",
@@ -118,6 +122,48 @@ class LiveStockProvider:
             choices = "、".join(f"{code} {catalog[code]['name']}" for code in partial[:6])
             raise ValueError(f"名稱符合多檔股票，請輸入代號：{choices}")
         raise ValueError(f"找不到台股代號或名稱：{query}")
+
+    def market_screen_candidates(self, per_bucket: int = 8) -> dict:
+        """Free two-stage market screen using official latest P/E and P/B data.
+
+        All positive-multiple listed/OTC common stocks enter the broad screen.
+        The cheapest P/E, P/B and blended buckets advance to the expensive
+        ten-year valuation pass, keeping the public API workload practical.
+        """
+        rows, dates = [], []
+        for index, url in enumerate(MARKET_MULTIPLE_SOURCES):
+            payload = self._json(url, 20)
+            for item in payload:
+                if index == 0:
+                    code, name = str(item.get("Code", "")), str(item.get("Name", ""))
+                    pe, pb, report_date = item.get("PEratio"), item.get("PBratio"), item.get("Date")
+                else:
+                    code, name = str(item.get("SecuritiesCompanyCode", "")), str(item.get("CompanyName", ""))
+                    pe, pb, report_date = item.get("PriceEarningRatio"), item.get("PriceBookRatio"), item.get("Date")
+                pe, pb = self._positive(pe), self._positive(pb)
+                if not (code.isdigit() and len(code) == 4 and pe and pb):
+                    continue
+                if not (3 <= pe <= 50 and 0.2 <= pb <= 8):
+                    continue
+                rows.append({"ticker": code, "name": name, "pe": pe, "pb": pb})
+                if report_date:
+                    dates.append(str(report_date))
+        by_pe = sorted(rows, key=lambda row: (row["pe"], row["pb"]))[:per_bucket]
+        by_pb = sorted(rows, key=lambda row: (row["pb"], row["pe"]))[:per_bucket]
+        blended = sorted(rows, key=lambda row: (row["pe"] / 20 + row["pb"] / 2, row["pe"]))[:per_bucket]
+        finalists = []
+        seen = set()
+        for row in by_pe + by_pb + blended:
+            if row["ticker"] not in seen:
+                finalists.append(row)
+                seen.add(row["ticker"])
+        return {
+            "universe_total": len(rows),
+            "eligible_total": len(rows),
+            "finalists": finalists,
+            "as_of": max(dates) if dates else None,
+            "method": "證交所＋櫃買中心全市場正 P/E／正 P/B 初篩，再以網站十年 P/E＋P/B 模型精算低估值候選",
+        }
 
     @staticmethod
     def _positive(value):

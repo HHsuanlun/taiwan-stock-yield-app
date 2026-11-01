@@ -39,7 +39,7 @@ def ranking_valuation(ticker: str):
     return calculate(snapshot_data, history_data, forecast_data, {})
 
 
-ranking_service = RankingService(ranking_valuation)
+ranking_service = RankingService(ranking_valuation, market_candidate_loader=provider.market_screen_candidates)
 
 
 @app.get("/")
