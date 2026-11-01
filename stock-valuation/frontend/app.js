@@ -25,6 +25,15 @@ function renderRanking(payload) {
   });
   setText("rankingStatus",`${payload.available}／${payload.total} 檔 · 每 15 分鐘更新`);
   if(payload.errors.length){$("rankingStatus").title=payload.errors.map(error=>`${error.ticker}: ${error.message}`).join("\n");}
+  const reference=payload.shareholder_earnings_reference;
+  const referenceCard=$("shareholderEarningsReference");
+  if(reference){
+    referenceCard.hidden=false;
+    setText("referenceName",reference.company_name);setText("referenceTicker",reference.ticker);
+    setText("referenceGap",`${reference.upside_pct>=0?"+":""}${reference.upside_pct.toFixed(1)}%`);
+    setText("referenceProfile",reference.profile);setText("referenceBasis",reference.selection_basis);setText("referenceNote",reference.method_note);
+    $("referenceStock").onclick=()=>{$("ticker").value=reference.ticker;userCoreOverride=false;userWeightOverride=false;calculate();};
+  }else{referenceCard.hidden=true;}
   if(latest)syncRankingActive(latest.ticker);
 }
 

@@ -11,6 +11,18 @@ from .data.providers import COMMON_STOCKS, ETF_TICKERS
 
 FINANCIAL_TICKERS = tuple(code for code in COMMON_STOCKS if code not in ETF_TICKERS)
 
+# Life-insurance-exposed financial holdings for which reported EPS and realized
+# FVOCI equity gains should be read separately.  The reference still ranks on
+# Primary fair value; it does not capitalize the non-recurring gain at a P/E.
+SHAREHOLDER_EARNINGS_PROFILES = {
+    "2881": "壽險型金控",
+    "2882": "壽險型金控",
+    "2883": "壽險／證券型金控",
+    "2885": "證券型金控（須確認 FVOCI 揭露重大性）",
+    "2887": "含壽險金控（須確認合併後揭露口徑）",
+    "2891": "含壽險金控",
+}
+
 
 class RankingService:
     """Build and briefly cache a fair-value ranking for the common financial list."""
@@ -63,12 +75,24 @@ class RankingService:
             rows.sort(key=lambda row: (-row["upside_pct"], row["ticker"]))
             for rank, row in enumerate(rows, 1):
                 row["rank"] = rank
+            reference_candidates = [row for row in rows if row["ticker"] in SHAREHOLDER_EARNINGS_PROFILES]
+            reference = None
+            if reference_candidates:
+                winner = reference_candidates[0]
+                reference = {
+                    **winner,
+                    "profile": SHAREHOLDER_EARNINGS_PROFILES[winner["ticker"]],
+                    "selection_basis": "適用正式 EPS＋已實現 FVOCI 分開觀察，並以 Primary 中性合理價差排序",
+                    "method_note": "正式 EPS 仍用於 P/E；已實現 FVOCI 僅作股東可分配獲利／BPS 檢核，避免重複計算。",
+                    "eligible_tickers": list(SHAREHOLDER_EARNINGS_PROFILES),
+                }
             result = {
                 "basis": "中性合理價相對目前股價",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "total": len(self.tickers),
                 "available": len(rows),
                 "rows": rows,
+                "shareholder_earnings_reference": reference,
                 "errors": errors,
             }
             with self._cache_lock:

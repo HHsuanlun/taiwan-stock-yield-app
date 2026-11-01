@@ -189,6 +189,19 @@
 .ranking-gap small { display:block; margin-top:2px; color:var(--muted); font-size:10px; font-weight:600; }
 .ranking-loading { margin:0; padding:22px; border:1px dashed var(--line); border-radius:8px; color:var(--muted); text-align:center; }
 .ranking-note { margin:10px 0 0; color:var(--muted); font-size:11px; line-height:1.65; }
+.earnings-reference { margin-top:12px; padding:13px 14px; display:grid; grid-template-columns:minmax(190px,1fr) auto auto; align-items:center; gap:12px; border:1px solid #b9cddd; border-radius:8px; background:#f7fafc; }
+.earnings-reference[hidden] { display:none; }
+.earnings-reference h3 { margin:2px 0 0; color:var(--navy); font-size:15px; }
+.earnings-reference button { display:flex; align-items:baseline; gap:7px; padding:8px 11px; border:1px solid #9db3c9; border-radius:7px; background:#fff; color:var(--navy); cursor:pointer; }
+.earnings-reference button strong { font-size:14px; }
+.earnings-reference button span { color:var(--muted); font-size:11px; }
+.reference-value { text-align:right; }
+.reference-value span, .reference-value strong { display:block; }
+.reference-value span { color:var(--muted); font-size:10px; }
+.reference-value strong { margin-top:3px; color:var(--green); font-size:17px; }
+.earnings-reference > p, .earnings-reference > small { grid-column:1 / -1; margin:0; line-height:1.55; }
+.earnings-reference > p { color:var(--ink); font-size:12px; }
+.earnings-reference > small { color:var(--muted); font-size:11px; }
 
 @media (max-width: 600px) {
   .ranking-panel { padding:13px; }
@@ -198,4 +211,7 @@
   .ranking-current, .ranking-fair { display:none; }
   .ranking-identity em { display:block; margin-top:4px; }
   .ranking-gap { font-size:14px; }
+  .earnings-reference { grid-template-columns:1fr auto; }
+  .earnings-reference > div:first-child { grid-column:1 / -1; }
+  .reference-value { min-width:76px; }
 }
