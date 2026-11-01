@@ -6,6 +6,39 @@ let userCoreOverride=false;
 function money(value) { return Number(value).toFixed(2); }
 function setText(id, value) { const element=$(id); if(element) element.textContent=value; }
 
+function syncRankingActive(ticker) {
+  document.querySelectorAll("[data-ranking-stock]").forEach(row=>row.classList.toggle("active",row.dataset.rankingStock===ticker));
+}
+
+function renderRanking(payload) {
+  const list=$("rankingList");
+  list.replaceChildren();
+  payload.rows.forEach(row=>{
+    const button=document.createElement("button");
+    button.type="button";
+    button.className="ranking-row";
+    button.dataset.rankingStock=row.ticker;
+    const gap=`${row.upside_pct>=0?"+":""}${row.upside_pct.toFixed(1)}%`;
+    button.innerHTML=`<span class="ranking-number">${row.rank}</span><span class="ranking-identity"><strong>${row.company_name}</strong><small>${row.ticker}</small><em>NT$ ${money(row.current_price)} → ${money(row.fair_value)}</em></span><span class="ranking-current">NT$ ${money(row.current_price)}</span><span class="ranking-fair">NT$ ${money(row.fair_value)}</span><span class="ranking-gap ${row.upside_pct>=0?"positive":"negative"}">${gap}<small>${row.classification}</small></span>`;
+    button.addEventListener("click",()=>{$("ticker").value=row.ticker;userCoreOverride=false;userWeightOverride=false;calculate();});
+    list.appendChild(button);
+  });
+  setText("rankingStatus",`${payload.available}／${payload.total} 檔 · 每 15 分鐘更新`);
+  if(payload.errors.length){$("rankingStatus").title=payload.errors.map(error=>`${error.ticker}: ${error.message}`).join("\n");}
+  if(latest)syncRankingActive(latest.ticker);
+}
+
+async function loadRanking() {
+  try{
+    const res=await fetch("/api/ranking");
+    if(!res.ok)throw new Error((await res.json()).detail||"排行榜暫時無法載入");
+    renderRanking(await res.json());
+  }catch(error){
+    $("rankingList").innerHTML=`<p class="ranking-loading error">${error.message}</p>`;
+    setText("rankingStatus","載入失敗");
+  }
+}
+
 function drawScatter(data) {
   const svg = $("scatter"), w = 700, h = 330, pad = {l:52,r:25,t:22,b:42};
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
@@ -22,6 +55,7 @@ function drawScatter(data) {
 
 function render(data) {
   latest=data;
+  syncRankingActive(data.ticker);
   const a=data.assumptions;
   if(!userCoreOverride){
     const eps=$('eps'),bps=$('bps');
@@ -77,4 +111,4 @@ $("searchForm").addEventListener("submit",e=>{e.preventDefault();userCoreOverrid
 document.querySelectorAll("[data-stock]").forEach(button=>button.addEventListener("click",()=>{$("ticker").value=button.dataset.stock;userCoreOverride=false;userWeightOverride=false;calculate()}));
 $("reset").addEventListener("click",()=>{userCoreOverride=false;userWeightOverride=false;calculate()});
 $("toggleTable").addEventListener("click",()=>{const wrap=$("tableWrap");wrap.hidden=!wrap.hidden;$("toggleTable").textContent=wrap.hidden?"展開資料":"收合資料"});
-calculate();
+calculate().finally(loadRanking);

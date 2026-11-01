@@ -165,3 +165,37 @@
 .quick-stocks { display:flex!important; flex-wrap:wrap; gap:7px!important; margin-top:11px; }
 .search .quick-stocks button { width:auto; min-height:34px; padding:6px 10px; border:1px solid var(--line); background:#f4f7fa; color:var(--blue); font-size:12px; }
 .search .quick-stocks button:hover { background:#e7eef6; color:var(--navy); }
+
+.ranking-panel { margin-top:14px; padding:16px; background:var(--paper); border:1px solid var(--line); border-radius:10px; box-shadow:0 2px 8px #17365d0a; }
+.ranking-head { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:12px; }
+.ranking-head h2 { margin:0; color:var(--navy); font-size:17px; }
+.ranking-status { flex:none; padding:6px 9px; border-radius:999px; background:#edf3f9; color:var(--blue); font-size:11px; font-weight:700; }
+.ranking-columns, .ranking-row { display:grid; grid-template-columns:46px minmax(150px,1.35fr) minmax(90px,.8fr) minmax(100px,.8fr) minmax(92px,.75fr); align-items:center; gap:10px; }
+.ranking-columns { padding:0 12px 7px; color:var(--muted); font-size:11px; }
+.ranking-columns span:nth-child(n+3) { text-align:right; }
+.ranking-list { display:grid; gap:6px; }
+.ranking-row { width:100%; min-height:56px; padding:8px 12px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
+.ranking-row:hover, .ranking-row.active { border-color:#9db3c9; background:#f4f8fc; }
+.ranking-row.active { box-shadow:inset 3px 0 0 var(--blue); }
+.ranking-number { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:#edf3f9; color:var(--blue); font-size:12px; font-weight:800; }
+.ranking-identity strong, .ranking-identity small { display:block; }
+.ranking-identity strong { color:var(--navy); font-size:14px; }
+.ranking-identity small { margin-top:2px; color:var(--muted); font-size:11px; }
+.ranking-identity em { display:none; color:var(--muted); font-size:11px; font-style:normal; }
+.ranking-current, .ranking-fair, .ranking-gap { text-align:right; font-variant-numeric:tabular-nums; font-size:13px; font-weight:700; }
+.ranking-gap { font-size:15px; }
+.ranking-gap.positive { color:var(--green); }
+.ranking-gap.negative { color:var(--red); }
+.ranking-gap small { display:block; margin-top:2px; color:var(--muted); font-size:10px; font-weight:600; }
+.ranking-loading { margin:0; padding:22px; border:1px dashed var(--line); border-radius:8px; color:var(--muted); text-align:center; }
+.ranking-note { margin:10px 0 0; color:var(--muted); font-size:11px; line-height:1.65; }
+
+@media (max-width: 600px) {
+  .ranking-panel { padding:13px; }
+  .ranking-head { align-items:flex-start; }
+  .ranking-columns { display:none; }
+  .ranking-row { grid-template-columns:36px minmax(0,1fr) auto; gap:8px; padding:9px; }
+  .ranking-current, .ranking-fair { display:none; }
+  .ranking-identity em { display:block; margin-top:4px; }
+  .ranking-gap { font-size:14px; }
+}

@@ -7,7 +7,7 @@
   <title>台股估值比較</title>
   <link rel="stylesheet" href="/static/styles.css?v=2.4">
   <link rel="stylesheet" href="/static/currency.css?v=2.4">
-  <link rel="stylesheet" href="/static/context.css?v=2.6">
+  <link rel="stylesheet" href="/static/context.css?v=2.7">
 </head>
 <body>
   <header class="topbar"><div class="shell top"><a class="brand" href="/">台股估值比較</a><span class="sub">P/E＋P/B／情境合理價</span></div></header>
@@ -23,6 +23,15 @@
         </div>
         <small id="searchHint">可輸入上市／上櫃股票代號或中文簡稱；資料不足時不會硬算。</small>
       </form>
+      <section class="ranking-panel" aria-labelledby="rankingTitle">
+        <div class="ranking-head">
+          <div><p class="eyebrow">FINANCIAL VALUE RANKING</p><h2 id="rankingTitle">常用金融股合理價差排名</h2></div>
+          <span id="rankingStatus" class="ranking-status">準備載入…</span>
+        </div>
+        <div class="ranking-columns" aria-hidden="true"><span>排名</span><span>股票</span><span>目前股價</span><span>中性合理價</span><span>合理價差</span></div>
+        <div id="rankingList" class="ranking-list" aria-live="polite"><p class="ranking-loading">正在計算常用金融股排名…</p></div>
+        <p class="ranking-note">依「中性合理價 ÷ 目前股價 − 1」由高到低排序；正數代表模型合理價高於現價。點選任一股票可直接查看完整估值。ETF 不納入。</p>
+      </section>
     </section>
 
     <section id="app" class="dashboard" aria-live="polite">
@@ -96,6 +105,6 @@
       </article>
     </section>
   </main>
-  <script src="/static/app.js?v=3.1" defer></script>
+  <script src="/static/app.js?v=3.2" defer></script>
 </body>
 </html>

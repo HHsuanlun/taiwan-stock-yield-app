@@ -47,6 +47,7 @@ class LiveStockProvider:
         self._cache: dict[str, tuple[float, dict]] = {}
         self._names: tuple[float, dict[str, dict]] | None = None
         self._peer_cache: dict[str, tuple[float, dict]] = {}
+        self._peer_locks = {group: Lock() for group in PEER_GROUPS}
         self._lock = Lock()
 
     @staticmethod
@@ -144,40 +145,43 @@ class LiveStockProvider:
         cached = self._peer_cache.get(group)
         if cached and time.time() - cached[0] < 3600:
             return cached[1]
-        start = str(date.today() - timedelta(days=365 * 7))
-        series = []
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            futures = {pool.submit(self._peer_pb_series, code, start): code for code in PEER_GROUPS[group]}
-            for future in as_completed(futures):
-                try:
-                    series.append(future.result())
-                except Exception:
-                    continue
-        current_values = [item["latest"] for item in series if item["latest"]]
-        years = range(date.today().year - 5, date.today().year)
-        annual_medians = []
-        for year in years:
-            values = [item["yearly"].get(year) for item in series if item["yearly"].get(year)]
-            if values:
-                annual_medians.append(median(values))
-        if len(current_values) < 2 or len(annual_medians) < 3:
-            return None
-        current_median = median(current_values)
-        historical_median = median(annual_medians)
-        ratio = current_median / historical_median if historical_median else 1.0
-        above_history = 0
-        for item in series:
-            history = list(item["yearly"].values())[-5:]
-            if item["latest"] and history:
-                if item["latest"] > median(history):
+        with self._peer_locks[group]:
+            cached = self._peer_cache.get(group)
+            if cached and time.time() - cached[0] < 3600:
+                return cached[1]
+            start = str(date.today() - timedelta(days=365 * 7))
+            series = []
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                futures = {pool.submit(self._peer_pb_series, code, start): code for code in PEER_GROUPS[group]}
+                for future in as_completed(futures):
+                    try:
+                        series.append(future.result())
+                    except Exception:
+                        continue
+            current_values = [item["latest"] for item in series if item["latest"]]
+            years = range(date.today().year - 5, date.today().year)
+            annual_medians = []
+            for year in years:
+                values = [item["yearly"].get(year) for item in series if item["yearly"].get(year)]
+                if values:
+                    annual_medians.append(median(values))
+            if len(current_values) < 2 or len(annual_medians) < 3:
+                return None
+            current_median = median(current_values)
+            historical_median = median(annual_medians)
+            ratio = current_median / historical_median if historical_median else 1.0
+            above_history = 0
+            for item in series:
+                history = list(item["yearly"].values())[-5:]
+                if item["latest"] and history and item["latest"] > median(history):
                     above_history += 1
-        breadth = above_history / len(series)
-        confirmed = len(series) >= max(2, len(PEER_GROUPS[group]) // 2) and breadth >= 0.60
-        raw_factor = 0.70 + 0.30 * ratio if confirmed else 1.0
-        factor = min(1.10, max(0.90, raw_factor))
-        result = {"group": group, "peer_count": len(series), "current_median_pb": current_median, "historical_5y_median_pb": historical_median, "regime_ratio": ratio, "breadth": breadth, "confirmed": confirmed, "adjustment_factor": factor, "confidence": "Medium" if confirmed else "Low"}
-        self._peer_cache[group] = (time.time(), result)
-        return result
+            breadth = above_history / len(series)
+            confirmed = len(series) >= max(2, len(PEER_GROUPS[group]) // 2) and breadth >= 0.60
+            raw_factor = 0.70 + 0.30 * ratio if confirmed else 1.0
+            factor = min(1.10, max(0.90, raw_factor))
+            result = {"group": group, "peer_count": len(series), "current_median_pb": current_median, "historical_5y_median_pb": historical_median, "regime_ratio": ratio, "breadth": breadth, "confirmed": confirmed, "adjustment_factor": factor, "confidence": "Medium" if confirmed else "Low"}
+            self._peer_cache[group] = (time.time(), result)
+            return result
 
     def _load(self, ticker: str) -> dict:
         cached = self._cache.get(ticker)

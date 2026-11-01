@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .data.providers import FixtureProvider, LiveStockProvider
 from .models.schemas import HistoricalPoint, ValuationRequest, ValuationResult
+from .ranking import RankingService
 from .valuation.valuation_engine import calculate
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,9 +34,22 @@ def stock_data(query: str):
         raise HTTPException(status_code=422, detail=f"{ticker} 資料不足，暫時無法完成估值：{error}") from error
 
 
+def ranking_valuation(ticker: str):
+    _, snapshot_data, history_data, forecast_data = stock_data(ticker)
+    return calculate(snapshot_data, history_data, forecast_data, {})
+
+
+ranking_service = RankingService(ranking_valuation)
+
+
 @app.get("/")
 def index():
     return FileResponse(FRONTEND / "index.html")
+
+
+@app.get("/api/ranking")
+def ranking():
+    return ranking_service.get()
 
 
 @app.get("/api/stocks/{ticker}/snapshot")

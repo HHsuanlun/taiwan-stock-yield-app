@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from backend.data.providers import FixtureProvider, LiveStockProvider
+from backend.ranking import RankingService
 from backend.valuation.valuation_engine import calculate
 
 ROOT = Path(__file__).resolve().parent
@@ -25,6 +26,14 @@ def load_stock(query):
         if ticker == "2881":
             return ticker, FIXTURE.get_snapshot(ticker), FIXTURE.get_history(ticker), FIXTURE.get_forecasts(ticker)
         raise
+
+
+def ranking_valuation(ticker):
+    _, snapshot, history, forecast = load_stock(ticker)
+    return calculate(snapshot, history, forecast, {})
+
+
+RANKING = RankingService(ranking_valuation)
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -51,6 +60,11 @@ class Handler(SimpleHTTPRequestHandler):
         if path.startswith("/static/"):
             self.path = path.removeprefix("/static")
             return super().do_GET()
+        if path == "/api/ranking":
+            try:
+                return self.send_json(RANKING.get())
+            except Exception as exc:
+                return self.send_json({"detail": f"排行榜暫時無法載入：{exc}"}, 503)
         if path.startswith("/api/stocks/"):
             parts = path.strip("/").split("/")
             try:
