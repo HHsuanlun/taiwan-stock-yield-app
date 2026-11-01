@@ -201,6 +201,7 @@
 .reference-value strong { margin-top:3px; color:var(--green); font-size:17px; }
 .earnings-reference > p, .earnings-reference > small { grid-column:1 / -1; margin:0; line-height:1.55; }
 .earnings-reference > p { color:var(--ink); font-size:12px; }
+.earnings-reference > .reference-metrics { padding:8px 10px; border-radius:6px; background:#eaf4ed; color:#23613a; font-weight:700; }
 .earnings-reference > small { color:var(--muted); font-size:11px; }
 
 @media (max-width: 600px) {

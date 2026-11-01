@@ -4,7 +4,7 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
-from statistics import median
+from statistics import mean, median
 from threading import Lock
 from typing import Protocol
 from urllib.parse import urlencode
@@ -275,6 +275,27 @@ class LiveStockProvider:
         forecast_bps = latest["bps"]
         eps_improving = len(recent_eps) >= 2 and recent_eps[-1] >= recent_eps[-2]
         bps_improving = len(complete) >= 2 and complete[-1]["bps"] >= complete[-2]["bps"]
+        completed_years = list(range(current_year - 5, current_year))
+        dividend_yields_by_year = {}
+        for year in completed_years:
+            values = [self._positive(row.get("dividend_yield")) for row in multiples if str(row.get("date", "")).startswith(str(year))]
+            values = [value for value in values if value is not None]
+            if values:
+                dividend_yields_by_year[year] = median(values)
+        paid_five_years = len(dividend_yields_by_year) == 5 and all(value > 0 for value in dividend_yields_by_year.values())
+        average_dividend_yield = mean(dividend_yields_by_year.values()) if len(dividend_yields_by_year) == 5 else None
+        recent_volumes = [self._positive(row.get("Trading_Volume")) for row in prices[-20:]]
+        recent_volumes = [value for value in recent_volumes if value is not None]
+        average_volume_lots = mean(recent_volumes) / 1000 if recent_volumes else None
+        recommendation_qualification = {
+            "paid_dividend_five_years": paid_five_years,
+            "dividend_years": completed_years,
+            "annual_dividend_yields": {str(year): round(dividend_yields_by_year[year], 2) for year in completed_years if year in dividend_yields_by_year},
+            "average_dividend_yield_pct": None if average_dividend_yield is None else round(average_dividend_yield, 2),
+            "average_volume_lots_20d": None if average_volume_lots is None else round(average_volume_lots),
+            "passes_all": bool(paid_five_years and average_dividend_yield is not None and average_dividend_yield > 5 and average_volume_lots is not None and average_volume_lots >= 10000),
+            "rules": "最近 5 個完整年度每年有現金殖利率、5 年平均殖利率 > 5%、近 20 交易日平均成交量 >= 10,000 張",
+        }
         bundle = {
             "snapshot": {"ticker": ticker, "company_name": info["name"], "sector": info["industry"], "current_price": current_price, "as_of": price_date, "price_source": "Yahoo Finance" if yahoo_price else "FinMind"},
             "history": complete,
@@ -290,6 +311,7 @@ class LiveStockProvider:
                 "normalized_roe_basis": "traditional", "adjusted_bps_basis": "traditional", "sustainable_roe_basis": "traditional",
                 "long_term_growth_rate": 0.025, "roe_pb_confidence": 0.5, "accounting_regime_change": False,
                 "as_of": latest["date"], "data_method": "Yahoo 優先取得最新股價；FinMind 提供歷史股價與 PER/PBR 對齊。EPS=股價/PER，BPS=股價/PBR；預估 EPS 依最新公告口徑與近年趨勢正常化。",
+                "recommendation_qualification": recommendation_qualification,
             },
         }
         bundle["forecast"]["sector_peer_regime"] = self.peer_regime(ticker)

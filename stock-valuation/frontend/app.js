@@ -29,12 +29,20 @@ function renderRanking(payload) {
   const referenceCard=$("shareholderEarningsReference");
   if(reference){
     referenceCard.hidden=false;
+    $("referenceStock").hidden=false;
     setText("referenceName",reference.company_name);setText("referenceTicker",reference.ticker);
     setText("referenceGap",`${reference.upside_pct>=0?"+":""}${reference.upside_pct.toFixed(1)}%`);
     setText("referenceProfile",reference.profile);setText("referenceBasis",reference.selection_basis);setText("referenceNote",reference.method_note);
     const screen=payload.market_screen||{};
-    setText("marketCoverage",`全市場 ${screen.eligible_total||0} 檔符合初篩，${screen.valued_total||0} 檔完成十年模型精算`);
+    const q=reference.qualification||{};
+    setText("referenceMetrics",`連續 5 年配息 ✓　5 年平均殖利率 ${Number(q.average_dividend_yield_pct).toFixed(2)}%　20 日均量 ${Number(q.average_volume_lots_20d).toLocaleString("zh-TW")} 張`);
+    setText("marketCoverage",`全市場 ${screen.eligible_total||0} 檔符合初篩，${screen.valued_total||0} 檔完成十年模型精算，${screen.qualified_total||0} 檔通過配息與流動性條件`);
     $("referenceStock").onclick=()=>{$("ticker").value=reference.ticker;userCoreOverride=false;userWeightOverride=false;calculate();};
+  }else if(payload.market_screen){
+    referenceCard.hidden=false;$("referenceStock").hidden=true;
+    setText("referenceProfile","目前沒有符合全部條件的股票");setText("referenceBasis","需同時符合連續配息、殖利率、成交量與完整估值資料");
+    setText("referenceGap","—");setText("referenceMetrics","連續 5 年配息｜5 年平均殖利率 > 5%｜20 日均量 ≥ 10,000 張");
+    const screen=payload.market_screen;setText("marketCoverage",`已精算 ${screen.valued_total||0} 檔，通過 ${screen.qualified_total||0} 檔`);setText("referenceNote","條件不足時不勉強推薦。 ");
   }else{referenceCard.hidden=true;}
   if(latest)syncRankingActive(latest.ticker);
 }

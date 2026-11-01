@@ -55,6 +55,7 @@ class ValuationResult(BaseModel):
     valuation_heat: dict[str, Any]
     capital_efficiency: dict[str, Any]
     cross_validation: dict[str, Any]
+    recommendation_qualification: dict[str, Any] | None = None
     historical: list[HistoricalPoint]
     assumptions: dict[str, Any]
     source_notes: list[dict[str, str]]

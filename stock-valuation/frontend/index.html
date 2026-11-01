@@ -7,7 +7,7 @@
   <title>台股估值比較</title>
   <link rel="stylesheet" href="/static/styles.css?v=2.4">
   <link rel="stylesheet" href="/static/currency.css?v=2.4">
-  <link rel="stylesheet" href="/static/context.css?v=2.7">
+  <link rel="stylesheet" href="/static/context.css?v=2.8">
 </head>
 <body>
   <header class="topbar"><div class="shell top"><a class="brand" href="/">台股估值比較</a><span class="sub">P/E＋P/B／情境合理價</span></div></header>
@@ -34,7 +34,7 @@
           <div><p class="eyebrow">TAIWAN MARKET MODEL PICK</p><h3>全台股適用模型參考第一名</h3></div>
           <button id="referenceStock" type="button"><strong id="referenceName">—</strong><span id="referenceTicker">—</span></button>
           <div class="reference-value"><span>Primary 合理價差</span><strong id="referenceGap">—</strong></div>
-          <p><b id="referenceProfile">—</b> · <span id="referenceBasis">—</span></p><small><span id="marketCoverage">—</span> · <span id="referenceNote">—</span></small>
+          <p><b id="referenceProfile">—</b> · <span id="referenceBasis">—</span></p><p id="referenceMetrics" class="reference-metrics">—</p><small><span id="marketCoverage">—</span> · <span id="referenceNote">—</span></small>
         </article>
         <p class="ranking-note">依「中性合理價 ÷ 目前股價 − 1」由高到低排序；正數代表模型合理價高於現價。點選任一股票可直接查看完整估值。ETF 不納入。</p>
       </section>
@@ -111,6 +111,6 @@
       </article>
     </section>
   </main>
-  <script src="/static/app.js?v=3.3" defer></script>
+  <script src="/static/app.js?v=3.4" defer></script>
 </body>
 </html>

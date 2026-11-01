@@ -30,8 +30,8 @@ class RankingServiceTests(unittest.TestCase):
 
     def test_market_reference_uses_best_primary_gap_from_full_model_finalists(self):
         values = {
-            "2881": {"ticker": "2881", "company_name": "富邦金", "current_price": 100, "fair_value": 110, "upside_pct": 10, "classification": "合理", "confidence": "中"},
-            "2882": {"ticker": "2882", "company_name": "國泰金", "current_price": 60, "fair_value": 75, "upside_pct": 25, "classification": "便宜", "confidence": "中"},
+            "2881": {"ticker": "2881", "company_name": "富邦金", "current_price": 100, "fair_value": 110, "upside_pct": 10, "classification": "合理", "confidence": "中", "recommendation_qualification": {"passes_all": True}},
+            "2882": {"ticker": "2882", "company_name": "國泰金", "current_price": 60, "fair_value": 75, "upside_pct": 25, "classification": "便宜", "confidence": "中", "recommendation_qualification": {"passes_all": True}},
             "2884": {"ticker": "2884", "company_name": "玉山金", "current_price": 30, "fair_value": 45, "upside_pct": 50, "classification": "便宜", "confidence": "中"},
         }
         screen = lambda: {"eligible_total": 900, "as_of": "1151030", "method": "全市場兩階段掃描", "finalists": [{"ticker": "2881"}, {"ticker": "2882"}]}
@@ -45,13 +45,23 @@ class RankingServiceTests(unittest.TestCase):
     def test_market_candidate_need_not_be_financial_stock(self):
         values = {
             "2884": {"ticker": "2884", "company_name": "玉山金", "current_price": 30, "fair_value": 45, "upside_pct": 50, "classification": "便宜", "confidence": "中"},
-            "1102": {"ticker": "1102", "company_name": "亞泥", "current_price": 40, "fair_value": 52, "upside_pct": 30, "classification": "便宜", "confidence": "中"},
+            "1102": {"ticker": "1102", "company_name": "亞泥", "current_price": 40, "fair_value": 52, "upside_pct": 30, "classification": "便宜", "confidence": "中", "recommendation_qualification": {"passes_all": True}},
         }
         screen = lambda: {"eligible_total": 800, "as_of": "1151030", "method": "全市場兩階段掃描", "finalists": [{"ticker": "1102"}]}
         ranking = RankingService(values.__getitem__, tickers=("2884",), cache_seconds=60, market_candidate_loader=screen).get()
         reference = ranking["shareholder_earnings_reference"]
         self.assertEqual(reference["ticker"], "1102")
         self.assertIn("全台股", reference["profile"])
+
+    def test_market_reference_excludes_stock_that_fails_dividend_or_volume_rules(self):
+        values = {
+            "1102": {"ticker": "1102", "company_name": "亞泥", "current_price": 40, "fair_value": 52, "upside_pct": 30, "classification": "便宜", "confidence": "中", "recommendation_qualification": {"passes_all": False}},
+            "1216": {"ticker": "1216", "company_name": "統一", "current_price": 80, "fair_value": 88, "upside_pct": 10, "classification": "合理", "confidence": "中", "recommendation_qualification": {"passes_all": True}},
+        }
+        screen = lambda: {"eligible_total": 800, "as_of": "1151030", "method": "全市場兩階段掃描", "finalists": [{"ticker": "1102"}, {"ticker": "1216"}]}
+        ranking = RankingService(values.__getitem__, tickers=(), cache_seconds=60, market_candidate_loader=screen).get()
+        self.assertEqual(ranking["shareholder_earnings_reference"]["ticker"], "1216")
+        self.assertEqual(ranking["market_screen"]["qualified_total"], 1)
 
 
 if __name__ == "__main__":

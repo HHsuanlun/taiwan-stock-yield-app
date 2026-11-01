@@ -43,7 +43,7 @@ class RankingService:
             cached = self._cached()
             if cached:
                 return cached
-            rows, errors, market_rows, market_errors = [], [], [], []
+            rows, errors, market_evaluated_rows, market_errors = [], [], [], []
             market_screen = None
             market_tickers = []
             if self.market_candidate_loader:
@@ -67,17 +67,19 @@ class RankingService:
                             "upside_pct": round(float(value["upside_pct"]), 1),
                             "classification": value["classification"],
                             "confidence": value["confidence"],
+                            "recommendation_qualification": value.get("recommendation_qualification"),
                         }
                         if ticker in self.tickers:
                             rows.append(result_row)
                         if ticker in market_tickers:
-                            market_rows.append(result_row)
+                            market_evaluated_rows.append(result_row)
                     except Exception as error:
                         target = market_errors if ticker in market_tickers and ticker not in self.tickers else errors
                         target.append({"ticker": ticker, "message": str(error)})
             rows.sort(key=lambda row: (-row["upside_pct"], row["ticker"]))
             for rank, row in enumerate(rows, 1):
                 row["rank"] = rank
+            market_rows = [row for row in market_evaluated_rows if (row.get("recommendation_qualification") or {}).get("passes_all")]
             market_rows.sort(key=lambda row: (-row["upside_pct"], row["ticker"]))
             reference = None
             if market_rows:
@@ -87,6 +89,7 @@ class RankingService:
                     "profile": "全台股模型適用第一名",
                     "selection_basis": market_screen["method"],
                     "method_note": "推薦代表模型合理價差第一，不等於保證上漲；仍須檢查產業循環、一次性盈餘與最新重大訊息。",
+                    "qualification": winner["recommendation_qualification"],
                 }
             result = {
                 "basis": "中性合理價相對目前股價",
@@ -98,7 +101,8 @@ class RankingService:
                 "market_screen": {
                     "eligible_total": market_screen.get("eligible_total", 0) if market_screen else 0,
                     "finalist_total": len(market_tickers),
-                    "valued_total": len(market_rows),
+                    "valued_total": len(market_evaluated_rows),
+                    "qualified_total": len(market_rows),
                     "as_of": market_screen.get("as_of") if market_screen else None,
                     "errors": market_errors,
                 },

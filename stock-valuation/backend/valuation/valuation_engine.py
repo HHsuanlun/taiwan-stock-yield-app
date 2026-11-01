@@ -200,6 +200,7 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
         "valuation_heat": valuation_heat,
         "capital_efficiency": capital_efficiency,
         "cross_validation": cross_validation,
+        "recommendation_qualification": forecast.get("recommendation_qualification"),
         "historical": history,
         "assumptions": {
             "forecast_eps": round(base_eps, 2),
