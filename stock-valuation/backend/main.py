@@ -11,7 +11,7 @@ from .valuation.valuation_engine import calculate
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
-provider = LiveStockProvider()
+provider = LiveStockProvider(cache_seconds=21600)
 fixture_provider = FixtureProvider()
 app = FastAPI(title="台股估值實驗室 API", version="1.0.0")
 app.mount("/static", StaticFiles(directory=FRONTEND), name="static")

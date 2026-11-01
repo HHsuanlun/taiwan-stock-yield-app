@@ -2,9 +2,29 @@ const $ = (id) => document.getElementById(id);
 let latest;
 let userWeightOverride=false;
 let userCoreOverride=false;
+const VALUATION_CACHE_KEY="tw-valuation-browser-cache-v1";
+const CACHE_FRESH_MS=6*60*60*1000;
+const CACHE_FALLBACK_MS=7*24*60*60*1000;
 
 function money(value) { return Number(value).toFixed(2); }
 function setText(id, value) { const element=$(id); if(element) element.textContent=value; }
+
+function readValuationCache(){
+  try{return JSON.parse(localStorage.getItem(VALUATION_CACHE_KEY)||"{}");}catch(_){return {};}
+}
+function findCachedValuation(query,maxAge){
+  const normalized=query.trim().toUpperCase().replace(/\.(TW|TWO)$/i,"");
+  const entries=Object.values(readValuationCache());
+  return entries.find(entry=>Date.now()-entry.saved_at<=maxAge&&(entry.data.ticker===normalized||entry.data.company_name===query.trim()))||null;
+}
+function saveCachedValuation(data){
+  try{
+    const cache=readValuationCache();cache[data.ticker]={saved_at:Date.now(),data};
+    const trimmed=Object.fromEntries(Object.entries(cache).sort((a,b)=>b[1].saved_at-a[1].saved_at).slice(0,40));
+    localStorage.setItem(VALUATION_CACHE_KEY,JSON.stringify(trimmed));
+  }catch(_){/* Private browsing or storage limits must not block valuation. */}
+}
+function cacheTime(savedAt){return new Date(savedAt).toLocaleString("zh-TW",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});}
 
 function syncRankingActive(ticker) {
   document.querySelectorAll("[data-ranking-stock]").forEach(row=>row.classList.toggle("active",row.dataset.rankingStock===ticker));
@@ -121,7 +141,10 @@ async function calculate() {
   const peWeight=Number($("peWeight").value)/100;
   const payload={ticker:$("ticker").value.trim()};if(userCoreOverride){payload.forecast_eps=Number($("eps").value);payload.forecast_bps=Number($("bps").value);}if(userWeightOverride){payload.pe_weight=peWeight;payload.pb_weight=1-peWeight;payload.weights_are_final=true;}
   $("searchHint").textContent="正在查找股票與估值資料…";$("searchHint").className="";
-  try{const res=await fetch("/api/valuation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!res.ok)throw new Error((await res.json()).detail||"估值服務暫時無法使用");render(await res.json());$("ticker").value=latest.ticker;$("searchHint").textContent=`已載入 ${latest.company_name} ${latest.ticker}；實際採用來源請見下方資料聲明。`;$("searchHint").className=""}catch(err){$("searchHint").textContent=err.message;$("searchHint").className="error"}
+  const canUseCache=!userCoreOverride&&!userWeightOverride;
+  const cached=canUseCache?findCachedValuation(payload.ticker,CACHE_FRESH_MS):null;
+  if(cached){render(cached.data);$("ticker").value=latest.ticker;$("searchHint").textContent=`已從本機快取載入 ${latest.company_name} ${latest.ticker}（儲存於 ${cacheTime(cached.saved_at)}）；6 小時內不重複抓取。`;return;}
+  try{const res=await fetch("/api/valuation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!res.ok)throw new Error((await res.json()).detail||"估值服務暫時無法使用");const data=await res.json();render(data);if(canUseCache)saveCachedValuation(data);$("ticker").value=latest.ticker;$("searchHint").textContent=`已載入 ${latest.company_name} ${latest.ticker}；資料已儲存在此瀏覽器 6 小時。`;$("searchHint").className=""}catch(err){const stale=canUseCache?findCachedValuation(payload.ticker,CACHE_FALLBACK_MS):null;if(stale){render(stale.data);$("ticker").value=latest.ticker;$("searchHint").textContent=`即時來源暫時無法使用，顯示 ${cacheTime(stale.saved_at)} 儲存的資料：${err.message}`;$("searchHint").className="error"}else{$("searchHint").textContent=err.message;$("searchHint").className="error"}}
 }
 
 function syncControls(){setText("epsOut",Number($("eps").value).toFixed(2));setText("bpsOut",Number($("bps").value).toFixed(1));const w=Number($("peWeight").value);setText("weightOut",`P/E ${w.toFixed(1)}% · P/B ${(100-w).toFixed(1)}%`);calculate()}

@@ -14,7 +14,7 @@ from backend.valuation.valuation_engine import calculate
 
 ROOT = Path(__file__).resolve().parent
 FRONTEND = ROOT / "frontend"
-PROVIDER = LiveStockProvider()
+PROVIDER = LiveStockProvider(cache_seconds=21600)
 FIXTURE = FixtureProvider()
 
 
