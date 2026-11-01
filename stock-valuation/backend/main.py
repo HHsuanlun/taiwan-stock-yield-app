@@ -39,7 +39,10 @@ def ranking_valuation(ticker: str):
     return calculate(snapshot_data, history_data, forecast_data, {})
 
 
-ranking_service = RankingService(ranking_valuation, market_candidate_loader=provider.market_screen_candidates)
+# Keep interactive stock lookup responsive on the free data tier.  A full
+# market scan must not run automatically in the web process because it can
+# exhaust the shared FinMind request allowance and block normal lookups.
+ranking_service = RankingService(ranking_valuation)
 
 
 @app.get("/")
