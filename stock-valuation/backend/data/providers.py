@@ -137,23 +137,26 @@ class LiveStockProvider:
                 if index == 0:
                     code, name = str(item.get("Code", "")), str(item.get("Name", ""))
                     pe, pb, report_date = item.get("PEratio"), item.get("PBratio"), item.get("Date")
+                    current_yield = item.get("DividendYield")
                 else:
                     code, name = str(item.get("SecuritiesCompanyCode", "")), str(item.get("CompanyName", ""))
                     pe, pb, report_date = item.get("PriceEarningRatio"), item.get("PriceBookRatio"), item.get("Date")
-                pe, pb = self._positive(pe), self._positive(pb)
+                    current_yield = item.get("YieldRatio")
+                pe, pb, current_yield = self._positive(pe), self._positive(pb), self._positive(current_yield)
                 if not (code.isdigit() and len(code) == 4 and pe and pb):
                     continue
                 if not (3 <= pe <= 50 and 0.2 <= pb <= 8):
                     continue
-                rows.append({"ticker": code, "name": name, "pe": pe, "pb": pb})
+                rows.append({"ticker": code, "name": name, "pe": pe, "pb": pb, "current_yield": current_yield or 0})
                 if report_date:
                     dates.append(str(report_date))
         by_pe = sorted(rows, key=lambda row: (row["pe"], row["pb"]))[:per_bucket]
         by_pb = sorted(rows, key=lambda row: (row["pb"], row["pe"]))[:per_bucket]
         blended = sorted(rows, key=lambda row: (row["pe"] / 20 + row["pb"] / 2, row["pe"]))[:per_bucket]
+        by_yield = sorted(rows, key=lambda row: (-row["current_yield"], row["pe"]))[:per_bucket]
         finalists = []
         seen = set()
-        for row in by_pe + by_pb + blended:
+        for row in by_pe + by_pb + blended + by_yield:
             if row["ticker"] not in seen:
                 finalists.append(row)
                 seen.add(row["ticker"])
