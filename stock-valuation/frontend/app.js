@@ -153,6 +153,6 @@ $("searchForm").addEventListener("submit",e=>{e.preventDefault();userCoreOverrid
 document.querySelectorAll("[data-stock]").forEach(button=>button.addEventListener("click",()=>{$("ticker").value=button.dataset.stock;userCoreOverride=false;userWeightOverride=false;calculate()}));
 $("reset").addEventListener("click",()=>{userCoreOverride=false;userWeightOverride=false;calculate()});
 $("toggleTable").addEventListener("click",()=>{const wrap=$("tableWrap");wrap.hidden=!wrap.hidden;$("toggleTable").textContent=wrap.hidden?"展開資料":"收合資料"});
-// Do not launch the multi-stock ranking automatically: on a free data tier it
-// can consume the allowance needed for the user's interactive stock lookup.
-calculate();
+// Interactive lookup runs first. Ranking then reads the daily server snapshot;
+// only a missing/stale snapshot can trigger one refresh of the curated pool.
+calculate().finally(loadRanking);

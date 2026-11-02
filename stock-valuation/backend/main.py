@@ -42,7 +42,12 @@ def ranking_valuation(ticker: str):
 # Keep interactive stock lookup responsive on the free data tier.  A full
 # market scan must not run automatically in the web process because it can
 # exhaust the shared FinMind request allowance and block normal lookups.
-ranking_service = RankingService(ranking_valuation)
+ranking_service = RankingService(
+    ranking_valuation,
+    cache_seconds=86400,
+    market_candidate_loader=provider.market_screen_candidates,
+    snapshot_path=ROOT / "backend" / "data" / "ranking_snapshot.json",
+)
 
 
 @app.get("/")

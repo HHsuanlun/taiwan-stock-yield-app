@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import time
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Callable
+from pathlib import Path
 
 from .data.providers import COMMON_STOCKS, ETF_TICKERS
 
@@ -20,11 +22,13 @@ class RankingService:
         tickers: tuple[str, ...] = FINANCIAL_TICKERS,
         cache_seconds: int = 900,
         market_candidate_loader: Callable[[], dict] | None = None,
+        snapshot_path: Path | None = None,
     ):
         self.valuation_loader = valuation_loader
         self.tickers = tickers
         self.cache_seconds = cache_seconds
         self.market_candidate_loader = market_candidate_loader
+        self.snapshot_path = snapshot_path
         self._cache: tuple[float, dict] | None = None
         self._cache_lock = Lock()
         self._build_lock = Lock()
@@ -33,7 +37,27 @@ class RankingService:
         with self._cache_lock:
             if self._cache and time.time() - self._cache[0] < self.cache_seconds:
                 return self._cache[1]
+        if self.snapshot_path and self.snapshot_path.exists():
+            try:
+                if time.time() - self.snapshot_path.stat().st_mtime < self.cache_seconds:
+                    payload = json.loads(self.snapshot_path.read_text(encoding="utf-8"))
+                    with self._cache_lock:
+                        self._cache = (time.time(), payload)
+                    return payload
+            except (OSError, ValueError):
+                pass
         return None
+
+    def _save_snapshot(self, result: dict) -> None:
+        if not self.snapshot_path:
+            return
+        try:
+            self.snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = self.snapshot_path.with_suffix(".tmp")
+            temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(self.snapshot_path)
+        except OSError:
+            pass
 
     def get(self) -> dict:
         cached = self._cached()
@@ -110,4 +134,5 @@ class RankingService:
             }
             with self._cache_lock:
                 self._cache = (time.time(), result)
+            self._save_snapshot(result)
             return result

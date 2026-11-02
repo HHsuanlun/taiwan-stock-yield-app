@@ -41,6 +41,12 @@ PEER_GROUPS = {
     "securities": ("2883", "2885"),
 }
 PEER_GROUP_BY_TICKER = {ticker: group for group, tickers in PEER_GROUPS.items() for ticker in tickers}
+MAINSTREAM_RECOMMENDATION_TICKERS = {
+    "1102", "1301", "1303", "2002", "2303", "2324", "2356", "2357",
+    "2382", "2603", "2801", "2880", "2881", "2882", "2883", "2884",
+    "2885", "2886", "2887", "2890", "2891", "2892", "5876", "5880",
+    "6505", "9904", "9910", "9921", "9945",
+}
 
 
 class LiveStockProvider:
@@ -145,27 +151,20 @@ class LiveStockProvider:
                 pe, pb, current_yield = self._positive(pe), self._positive(pb), self._positive(current_yield)
                 if not (code.isdigit() and len(code) == 4 and pe and pb):
                     continue
+                if code not in MAINSTREAM_RECOMMENDATION_TICKERS:
+                    continue
                 if not (3 <= pe <= 50 and 0.2 <= pb <= 8):
                     continue
                 rows.append({"ticker": code, "name": name, "pe": pe, "pb": pb, "current_yield": current_yield or 0})
                 if report_date:
                     dates.append(str(report_date))
-        by_pe = sorted(rows, key=lambda row: (row["pe"], row["pb"]))[:per_bucket]
-        by_pb = sorted(rows, key=lambda row: (row["pb"], row["pe"]))[:per_bucket]
-        blended = sorted(rows, key=lambda row: (row["pe"] / 20 + row["pb"] / 2, row["pe"]))[:per_bucket]
-        by_yield = sorted(rows, key=lambda row: (-row["current_yield"], row["pe"]))[:per_bucket]
-        finalists = []
-        seen = set()
-        for row in by_pe + by_pb + blended + by_yield:
-            if row["ticker"] not in seen:
-                finalists.append(row)
-                seen.add(row["ticker"])
+        finalists = sorted(rows, key=lambda row: (row["pe"] / 20 + row["pb"] / 2, -row["current_yield"]))
         return {
             "universe_total": len(rows),
             "eligible_total": len(rows),
             "finalists": finalists,
             "as_of": max(dates) if dates else None,
-            "method": "證交所＋櫃買中心全市場正 P/E／正 P/B 初篩，再以網站十年 P/E＋P/B 模型精算低估值候選",
+            "method": "大型常見且具流動性的台股池，經正 P/E／正 P/B 初篩，再以十年 P/E＋P/B 模型及配息／成交量條件精算",
         }
 
     @staticmethod

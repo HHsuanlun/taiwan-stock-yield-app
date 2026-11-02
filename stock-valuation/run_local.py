@@ -33,7 +33,12 @@ def ranking_valuation(ticker):
     return calculate(snapshot, history, forecast, {})
 
 
-RANKING = RankingService(ranking_valuation)
+RANKING = RankingService(
+    ranking_valuation,
+    cache_seconds=86400,
+    market_candidate_loader=PROVIDER.market_screen_candidates,
+    snapshot_path=ROOT / "backend" / "data" / "ranking_snapshot.json",
+)
 
 
 class Handler(SimpleHTTPRequestHandler):
