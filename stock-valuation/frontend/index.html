@@ -25,7 +25,7 @@
       </form>
       <section class="ranking-panel" aria-labelledby="rankingTitle">
         <div class="ranking-head">
-          <div><p class="eyebrow">FINANCIAL VALUE RANKING</p><h2 id="rankingTitle">常用金融股合理價差排名</h2></div>
+          <div><p class="eyebrow">VALUE RANKING</p><h2 id="rankingTitle">每日快照＋我的查詢合理價差排名</h2></div>
           <span id="rankingStatus" class="ranking-status">載入每日快照…</span>
         </div>
         <div class="ranking-columns" aria-hidden="true"><span>排名</span><span>股票</span><span>目前股價</span><span>中性合理價</span><span>合理價差</span></div>
@@ -36,7 +36,7 @@
           <div class="reference-value"><span>Primary 合理價差</span><strong id="referenceGap">—</strong></div>
           <p><b id="referenceProfile">—</b> · <span id="referenceBasis">—</span></p><p id="referenceMetrics" class="reference-metrics">—</p><small><span id="marketCoverage">—</span> · <span id="referenceNote">—</span></small>
         </article>
-        <p class="ranking-note">依「中性合理價 ÷ 目前股價 − 1」由高到低排序；正數代表模型合理價高於現價。點選任一股票可直接查看完整估值。ETF 不納入。</p>
+        <p class="ranking-note">成功查詢的股票會儲存在此瀏覽器並自動加入排名，最多保留 20 檔；依「中性合理價 ÷ 目前股價 − 1」排序。通過配息與成交量條件時，也會參與推薦第一名比較。ETF 不納入。</p>
       </section>
     </section>
 
@@ -111,6 +111,6 @@
       </article>
     </section>
   </main>
-  <script src="/static/app.js?v=3.7" defer></script>
+  <script src="/static/app.js?v=3.8" defer></script>
 </body>
 </html>

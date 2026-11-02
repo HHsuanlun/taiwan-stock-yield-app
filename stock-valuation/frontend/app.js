@@ -1,8 +1,10 @@
 const $ = (id) => document.getElementById(id);
 let latest;
+let latestRankingPayload=null;
 let userWeightOverride=false;
 let userCoreOverride=false;
 const VALUATION_CACHE_KEY="tw-valuation-browser-cache-v1";
+const USER_RANKING_KEY="tw-valuation-user-ranking-v1";
 const CACHE_FRESH_MS=6*60*60*1000;
 const CACHE_FALLBACK_MS=7*24*60*60*1000;
 
@@ -25,27 +27,44 @@ function saveCachedValuation(data){
   }catch(_){/* Private browsing or storage limits must not block valuation. */}
 }
 function cacheTime(savedAt){return new Date(savedAt).toLocaleString("zh-TW",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});}
+function readUserRanking(){try{return JSON.parse(localStorage.getItem(USER_RANKING_KEY)||"{}");}catch(_){return {};}}
+function saveUserRankingStock(data){
+  try{
+    const stocks=readUserRanking();
+    stocks[data.ticker]={ticker:data.ticker,company_name:data.company_name,current_price:Number(data.current_price),fair_value:Number(data.fair_value),upside_pct:Number(data.upside_pct),classification:data.classification,confidence:data.confidence,recommendation_qualification:data.recommendation_qualification||null,user_added:true,saved_at:Date.now()};
+    const trimmed=Object.fromEntries(Object.entries(stocks).sort((a,b)=>b[1].saved_at-a[1].saved_at).slice(0,20));
+    localStorage.setItem(USER_RANKING_KEY,JSON.stringify(trimmed));
+    if(latestRankingPayload)renderRanking(latestRankingPayload);
+  }catch(_){/* Storage is optional. */}
+}
 
 function syncRankingActive(ticker) {
   document.querySelectorAll("[data-ranking-stock]").forEach(row=>row.classList.toggle("active",row.dataset.rankingStock===ticker));
 }
 
 function renderRanking(payload) {
+  latestRankingPayload=payload;
   const list=$("rankingList");
   list.replaceChildren();
-  payload.rows.forEach(row=>{
+  const userRows=Object.values(readUserRanking());
+  const merged=new Map(payload.rows.map(row=>[row.ticker,{...row}]));
+  userRows.forEach(row=>merged.set(row.ticker,{...(merged.get(row.ticker)||{}),...row,user_added:true}));
+  const rankedRows=[...merged.values()].sort((a,b)=>b.upside_pct-a.upside_pct||a.ticker.localeCompare(b.ticker));
+  rankedRows.forEach((row,index)=>{
     const button=document.createElement("button");
     button.type="button";
     button.className="ranking-row";
     button.dataset.rankingStock=row.ticker;
     const gap=`${row.upside_pct>=0?"+":""}${row.upside_pct.toFixed(1)}%`;
-    button.innerHTML=`<span class="ranking-number">${row.rank}</span><span class="ranking-identity"><strong>${row.company_name}</strong><small>${row.ticker}</small><em>NT$ ${money(row.current_price)} → ${money(row.fair_value)}</em></span><span class="ranking-current">NT$ ${money(row.current_price)}</span><span class="ranking-fair">NT$ ${money(row.fair_value)}</span><span class="ranking-gap ${row.upside_pct>=0?"positive":"negative"}">${gap}<small>${row.classification}</small></span>`;
+    button.innerHTML=`<span class="ranking-number">${index+1}</span><span class="ranking-identity"><strong>${row.company_name}</strong><small>${row.ticker}${row.user_added?" · 我的查詢":""}</small><em>NT$ ${money(row.current_price)} → ${money(row.fair_value)}</em></span><span class="ranking-current">NT$ ${money(row.current_price)}</span><span class="ranking-fair">NT$ ${money(row.fair_value)}</span><span class="ranking-gap ${row.upside_pct>=0?"positive":"negative"}">${gap}<small>${row.classification}</small></span>`;
     button.addEventListener("click",()=>{$("ticker").value=row.ticker;userCoreOverride=false;userWeightOverride=false;calculate();});
     list.appendChild(button);
   });
-  setText("rankingStatus",`${payload.available}／${payload.total} 檔 · 每 15 分鐘更新`);
+  setText("rankingStatus",`${payload.available} 檔快照＋${userRows.length} 檔我的查詢`);
   if(payload.errors.length){$("rankingStatus").title=payload.errors.map(error=>`${error.ticker}: ${error.message}`).join("\n");}
-  const reference=payload.shareholder_earnings_reference;
+  const personalCandidates=userRows.filter(row=>(row.recommendation_qualification||{}).passes_all);
+  let reference=payload.shareholder_earnings_reference;
+  personalCandidates.forEach(row=>{if(!reference||row.upside_pct>reference.upside_pct)reference={...row,profile:"我的查詢中符合條件第一名",selection_basis:"每日主流股票快照＋使用者查詢股票，依 Primary 合理價差排序",method_note:"使用已查詢資料加入比較，不額外呼叫資料來源。",qualification:row.recommendation_qualification};});
   const referenceCard=$("shareholderEarningsReference");
   if(reference){
     referenceCard.hidden=false;
@@ -143,8 +162,8 @@ async function calculate() {
   $("searchHint").textContent="正在查找股票與估值資料…";$("searchHint").className="";
   const canUseCache=!userCoreOverride&&!userWeightOverride;
   const cached=canUseCache?findCachedValuation(payload.ticker,CACHE_FRESH_MS):null;
-  if(cached){render(cached.data);$("ticker").value=latest.ticker;$("searchHint").textContent=`已從本機快取載入 ${latest.company_name} ${latest.ticker}（儲存於 ${cacheTime(cached.saved_at)}）；6 小時內不重複抓取。`;return;}
-  try{const res=await fetch("/api/valuation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!res.ok)throw new Error((await res.json()).detail||"估值服務暫時無法使用");const data=await res.json();render(data);if(canUseCache)saveCachedValuation(data);$("ticker").value=latest.ticker;$("searchHint").textContent=`已載入 ${latest.company_name} ${latest.ticker}；資料已儲存在此瀏覽器 6 小時。`;$("searchHint").className=""}catch(err){const stale=canUseCache?findCachedValuation(payload.ticker,CACHE_FALLBACK_MS):null;if(stale){render(stale.data);$("ticker").value=latest.ticker;$("searchHint").textContent=`即時來源暫時無法使用，顯示 ${cacheTime(stale.saved_at)} 儲存的資料：${err.message}`;$("searchHint").className="error"}else{$("searchHint").textContent=err.message;$("searchHint").className="error"}}
+  if(cached){render(cached.data);saveUserRankingStock(cached.data);$("ticker").value=latest.ticker;$("searchHint").textContent=`已從本機快取載入 ${latest.company_name} ${latest.ticker}（儲存於 ${cacheTime(cached.saved_at)}）；已加入我的排名。`;return;}
+  try{const res=await fetch("/api/valuation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!res.ok)throw new Error((await res.json()).detail||"估值服務暫時無法使用");const data=await res.json();render(data);if(canUseCache){saveCachedValuation(data);saveUserRankingStock(data);}$("ticker").value=latest.ticker;$("searchHint").textContent=`已載入 ${latest.company_name} ${latest.ticker}；已儲存並加入我的排名。`;$("searchHint").className=""}catch(err){const stale=canUseCache?findCachedValuation(payload.ticker,CACHE_FALLBACK_MS):null;if(stale){render(stale.data);saveUserRankingStock(stale.data);$("ticker").value=latest.ticker;$("searchHint").textContent=`即時來源暫時無法使用，顯示 ${cacheTime(stale.saved_at)} 儲存的資料並加入我的排名：${err.message}`;$("searchHint").className="error"}else{$("searchHint").textContent=err.message;$("searchHint").className="error"}}
 }
 
 function syncControls(){setText("epsOut",Number($("eps").value).toFixed(2));setText("bpsOut",Number($("bps").value).toFixed(1));const w=Number($("peWeight").value);setText("weightOut",`P/E ${w.toFixed(1)}% · P/B ${(100-w).toFixed(1)}%`);calculate()}
