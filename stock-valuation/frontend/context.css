@@ -175,6 +175,8 @@
 .ranking-columns span:nth-child(n+3) { text-align:right; }
 .ranking-list { display:grid; gap:6px; }
 .ranking-row { width:100%; min-height:56px; padding:8px 12px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
+.ranking-row { touch-action:pan-y; transition:transform .18s ease,opacity .18s ease; }
+.ranking-row.swipe-removing { transform:translateX(-110%); opacity:0; }
 .ranking-row:hover, .ranking-row.active { border-color:#9db3c9; background:#f4f8fc; }
 .ranking-row.active { box-shadow:inset 3px 0 0 var(--blue); }
 .ranking-number { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:#edf3f9; color:var(--blue); font-size:12px; font-weight:800; }
