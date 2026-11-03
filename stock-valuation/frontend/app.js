@@ -39,11 +39,15 @@ function removeRankingStock(ticker){
   delete userRankingStocks[ticker];hiddenRankingTickers.add(ticker);
   if(latestRankingPayload)renderRanking(latestRankingPayload);
 }
-function enableSwipeDelete(button,ticker){
-  let startX=0,startY=0,swiped=false;
-  button.addEventListener("touchstart",event=>{const touch=event.changedTouches[0];startX=touch.clientX;startY=touch.clientY;swiped=false;},{passive:true});
-  button.addEventListener("touchend",event=>{const touch=event.changedTouches[0],dx=touch.clientX-startX,dy=touch.clientY-startY;if(dx < -55&&Math.abs(dx)>Math.abs(dy)*1.25){swiped=true;button.classList.add("swipe-removing");setTimeout(()=>removeRankingStock(ticker),180);}},{passive:true});
-  button.addEventListener("click",event=>{if(swiped){event.preventDefault();event.stopImmediatePropagation();swiped=false;}},true);
+function closeSwipeRows(except=null){document.querySelectorAll(".ranking-row-wrap.swipe-open").forEach(row=>{if(row!==except)row.classList.remove("swipe-open");});}
+function enableSwipeDelete(button,wrapper,ticker){
+  let startX=0,startY=0,gesture=false;
+  button.addEventListener("touchstart",event=>{const touch=event.changedTouches[0];startX=touch.clientX;startY=touch.clientY;gesture=false;},{passive:true});
+  button.addEventListener("touchend",event=>{
+    const touch=event.changedTouches[0],dx=touch.clientX-startX,dy=touch.clientY-startY;
+    if(Math.abs(dx)>Math.abs(dy)*1.25&&Math.abs(dx)>35){gesture=true;if(dx<0){closeSwipeRows(wrapper);wrapper.classList.add("swipe-open");}else{wrapper.classList.remove("swipe-open");}}
+  },{passive:true});
+  button.addEventListener("click",event=>{if(gesture||wrapper.classList.contains("swipe-open")){event.preventDefault();event.stopImmediatePropagation();wrapper.classList.remove("swipe-open");gesture=false;}},true);
 }
 
 function syncRankingActive(ticker) {
@@ -59,6 +63,8 @@ function renderRanking(payload) {
   userRows.forEach(row=>merged.set(row.ticker,{...(merged.get(row.ticker)||{}),...row,user_added:true}));
   const rankedRows=[...merged.values()].filter(row=>!hiddenRankingTickers.has(row.ticker)).sort((a,b)=>b.upside_pct-a.upside_pct||a.ticker.localeCompare(b.ticker));
   rankedRows.forEach((row,index)=>{
+    const wrapper=document.createElement("div");wrapper.className="ranking-row-wrap";
+    const deleteButton=document.createElement("button");deleteButton.type="button";deleteButton.className="ranking-delete";deleteButton.setAttribute("aria-label",`從排名刪除 ${row.company_name}`);deleteButton.innerHTML='<span aria-hidden="true">🗑</span>';
     const button=document.createElement("button");
     button.type="button";
     button.className="ranking-row";
@@ -66,8 +72,9 @@ function renderRanking(payload) {
     const gap=`${row.upside_pct>=0?"+":""}${row.upside_pct.toFixed(1)}%`;
     button.innerHTML=`<span class="ranking-number">${index+1}</span><span class="ranking-identity"><strong>${row.company_name}</strong><small>${row.ticker}${row.user_added?" · 我的查詢":""}</small><em>NT$ ${money(row.current_price)} → ${money(row.fair_value)}</em></span><span class="ranking-current">NT$ ${money(row.current_price)}</span><span class="ranking-fair">NT$ ${money(row.fair_value)}</span><span class="ranking-gap ${row.upside_pct>=0?"positive":"negative"}">${gap}<small>${row.classification}</small></span>`;
     button.addEventListener("click",()=>{$("ticker").value=row.ticker;userCoreOverride=false;userWeightOverride=false;calculate();});
-    enableSwipeDelete(button,row.ticker);
-    list.appendChild(button);
+    deleteButton.addEventListener("click",()=>{wrapper.classList.add("delete-confirmed");setTimeout(()=>removeRankingStock(row.ticker),180);});
+    enableSwipeDelete(button,wrapper,row.ticker);
+    wrapper.append(deleteButton,button);list.appendChild(wrapper);
   });
   setText("rankingStatus",`${payload.available} 檔快照＋${userRows.length} 檔我的查詢`);
   if(payload.errors.length){$("rankingStatus").title=payload.errors.map(error=>`${error.ticker}: ${error.message}`).join("\n");}

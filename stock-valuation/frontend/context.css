@@ -174,9 +174,14 @@
 .ranking-columns { padding:0 12px 7px; color:var(--muted); font-size:11px; }
 .ranking-columns span:nth-child(n+3) { text-align:right; }
 .ranking-list { display:grid; gap:6px; }
+.ranking-row-wrap { position:relative; overflow:hidden; border-radius:8px; background:#d93b3b; }
+.ranking-delete { position:absolute; inset:0 0 0 auto; width:76px; display:grid; place-items:center; border:0; background:#d93b3b; color:#fff; cursor:pointer; }
+.ranking-delete span { font-size:24px; filter:grayscale(1) brightness(0) invert(1); }
 .ranking-row { width:100%; min-height:56px; padding:8px 12px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
-.ranking-row { touch-action:pan-y; transition:transform .18s ease,opacity .18s ease; }
-.ranking-row.swipe-removing { transform:translateX(-110%); opacity:0; }
+.ranking-row { position:relative; z-index:1; touch-action:pan-y; transition:transform .22s cubic-bezier(.2,.75,.25,1),opacity .18s ease; }
+.ranking-row-wrap.swipe-open .ranking-row { transform:translateX(-76px); }
+.ranking-row-wrap.delete-confirmed .ranking-row { transform:translateX(-110%); opacity:0; }
+.ranking-row-wrap.delete-confirmed .ranking-delete { width:100%; transition:width .18s ease; }
 .ranking-row:hover, .ranking-row.active { border-color:#9db3c9; background:#f4f8fc; }
 .ranking-row.active { box-shadow:inset 3px 0 0 var(--blue); }
 .ranking-number { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:#edf3f9; color:var(--blue); font-size:12px; font-weight:800; }
