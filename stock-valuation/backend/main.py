@@ -45,8 +45,14 @@ def ranking_valuation(ticker: str):
 ranking_service = RankingService(
     ranking_valuation,
     cache_seconds=86400,
-    market_candidate_loader=provider.market_screen_candidates,
     snapshot_path=ROOT / "backend" / "data" / "ranking_snapshot.json",
+)
+market_reference_service = RankingService(
+    ranking_valuation,
+    tickers=(),
+    cache_seconds=86400,
+    market_candidate_loader=provider.market_screen_candidates,
+    snapshot_path=ROOT / "backend" / "data" / "market_reference_snapshot.json",
 )
 
 
@@ -58,6 +64,12 @@ def index():
 @app.get("/api/ranking")
 def ranking():
     return ranking_service.get()
+
+
+@app.get("/api/ranking/market")
+def market_ranking():
+    """Run the broader market screen only after an explicit user request."""
+    return market_reference_service.get()
 
 
 @app.get("/api/stocks/{ticker}/snapshot")

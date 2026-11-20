@@ -87,28 +87,35 @@ function renderRanking(payload) {
   });
   setText("rankingStatus",`${payload.available} 檔快照＋${userRows.length} 檔我的查詢`);
   if(payload.errors.length){$("rankingStatus").title=payload.errors.map(error=>`${error.ticker}: ${error.message}`).join("\n");}
-  const personalCandidates=userRows.filter(row=>(row.recommendation_qualification||{}).passes_all);
-  let reference=payload.shareholder_earnings_reference;
-  personalCandidates.forEach(row=>{if(!reference||row.upside_pct>reference.upside_pct)reference={...row,profile:"我的查詢中符合條件第一名",selection_basis:"每日主流股票快照＋使用者查詢股票，依 Primary 合理價差排序",method_note:"使用已查詢資料加入比較，不額外呼叫資料來源。",qualification:row.recommendation_qualification};});
-  const referenceCard=$("shareholderEarningsReference");
+  $("shareholderEarningsReference").hidden=true;
+  if(latest)syncRankingActive(latest.ticker);
+}
+
+function renderMarketReference(payload){
+  const reference=payload.shareholder_earnings_reference,referenceCard=$("shareholderEarningsReference"),screen=payload.market_screen||{};
+  referenceCard.hidden=false;
   if(reference){
-    referenceCard.hidden=false;
     $("referenceStock").hidden=false;
     setText("referenceName",reference.company_name);setText("referenceTicker",reference.ticker);
     setText("referenceGap",`${reference.upside_pct>=0?"+":""}${reference.upside_pct.toFixed(1)}%`);
     setText("referenceProfile",reference.profile);setText("referenceBasis",reference.selection_basis);setText("referenceNote",reference.method_note);
-    const screen=payload.market_screen||{};
     const q=reference.qualification||{};
     setText("referenceMetrics",`連續 5 年配息 ✓　5 年平均殖利率 ${Number(q.average_dividend_yield_pct).toFixed(2)}%　20 日均量 ${Number(q.average_volume_lots_20d).toLocaleString("zh-TW")} 張`);
     setText("marketCoverage",`全市場 ${screen.eligible_total||0} 檔符合初篩，${screen.valued_total||0} 檔完成十年模型精算，${screen.qualified_total||0} 檔通過配息與流動性條件`);
     $("referenceStock").onclick=()=>{$("ticker").value=reference.ticker;userCoreOverride=false;userWeightOverride=false;calculate();};
-  }else if(payload.market_screen){
-    referenceCard.hidden=false;$("referenceStock").hidden=true;
+  }else{
+    $("referenceStock").hidden=true;setText("referenceGap","—");
     setText("referenceProfile","目前沒有符合全部條件的股票");setText("referenceBasis","需同時符合連續配息、殖利率、成交量與完整估值資料");
-    setText("referenceGap","—");setText("referenceMetrics","連續 5 年配息｜5 年平均殖利率 > 5%｜20 日均量 ≥ 10,000 張");
-    const screen=payload.market_screen;setText("marketCoverage",`已精算 ${screen.valued_total||0} 檔，通過 ${screen.qualified_total||0} 檔`);setText("referenceNote","條件不足時不勉強推薦。 ");
-  }else{referenceCard.hidden=true;}
-  if(latest)syncRankingActive(latest.ticker);
+    setText("referenceMetrics","連續 5 年配息｜5 年平均殖利率 > 5%｜20 日均量 ≥ 10,000 張");
+    setText("marketCoverage",`已精算 ${screen.valued_total||0} 檔，通過 ${screen.qualified_total||0} 檔`);setText("referenceNote","條件不足時不勉強推薦。");
+  }
+}
+
+async function scanMarketReference(){
+  const button=$("scanMarketReference");button.disabled=true;button.textContent="正在查詢全台股候選…";
+  try{const res=await fetch("/api/ranking/market");renderMarketReference(await responseJson(res,"全台股參考暫時無法載入"));button.textContent="重新查詢全台股參考第一名";}
+  catch(error){button.textContent="查詢全台股適用模型參考第一名";$("searchHint").textContent=error.message;$("searchHint").className="error";}
+  finally{button.disabled=false;}
 }
 
 async function loadRanking() {
@@ -197,6 +204,7 @@ let timer;["eps","bps"].forEach(id=>$(id).addEventListener("input",()=>{userCore
 $("searchForm").addEventListener("submit",e=>{e.preventDefault();userCoreOverride=false;userWeightOverride=false;calculate(true)});
 document.querySelectorAll("[data-stock]").forEach(button=>button.addEventListener("click",()=>{$("ticker").value=button.dataset.stock;userCoreOverride=false;userWeightOverride=false;calculate(true)}));
 $("reset").addEventListener("click",()=>{userCoreOverride=false;userWeightOverride=false;calculate()});
+$("scanMarketReference").addEventListener("click",scanMarketReference);
 $("toggleTable").addEventListener("click",()=>{const wrap=$("tableWrap");wrap.hidden=!wrap.hidden;$("toggleTable").textContent=wrap.hidden?"展開資料":"收合資料"});
 // Interactive lookup runs first. Ranking then reads the daily server snapshot;
 // only a missing/stale snapshot can trigger one refresh of the curated pool.
