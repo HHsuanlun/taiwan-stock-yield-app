@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from statistics import mean, median
 from threading import Lock
 from typing import Protocol
@@ -100,7 +100,7 @@ MAINSTREAM_RECOMMENDATION_TICKERS = {
 
 
 class LiveStockProvider:
-    """Free-data provider: FinMind first, exchange name lists, no paid API."""
+    """No-cost provider: TWSE/TPEx official multiples and Yahoo prices."""
 
     def __init__(self, cache_seconds: int = 900):
         self.cache_seconds = cache_seconds
@@ -108,6 +108,7 @@ class LiveStockProvider:
         self._names: tuple[float, dict[str, dict]] | None = None
         self._peer_cache: dict[str, tuple[float, dict]] = {}
         self._peer_locks = {group: Lock() for group in PEER_GROUPS}
+        self._official_cache: dict[tuple[str, str], dict[str, list[dict]]] = {}
         self._lock = Lock()
 
     @staticmethod
@@ -117,12 +118,109 @@ class LiveStockProvider:
             return json.loads(response.read().decode("utf-8"))
 
     def _api(self, dataset: str, ticker: str, start_date: str) -> list[dict]:
-        query = urlencode({"dataset": dataset, "data_id": ticker, "start_date": start_date})
-        payload = self._json(f"{FINMIND_API}?{query}")
-        rows = payload.get("data")
-        if payload.get("status") != 200 or not isinstance(rows, list) or not rows:
-            raise ValueError(payload.get("msg") or f"FinMind 未回傳 {dataset}")
-        return rows
+        # Official exchange data is primary and requires no API key. FinMind is
+        # retained only as a last fallback for temporary exchange interruptions.
+        try:
+            rows = self._official_history(ticker, start_date).get(dataset, [])
+            if rows:
+                return rows
+        except Exception:
+            pass
+        try:
+            query = urlencode({"dataset": dataset, "data_id": ticker, "start_date": start_date})
+            payload = self._json(f"{FINMIND_API}?{query}")
+            rows = payload.get("data")
+            if payload.get("status") == 200 and isinstance(rows, list) and rows:
+                return rows
+        except Exception:
+            pass
+        raise ValueError(f"證交所／櫃買中心未回傳 {ticker} 的 {dataset}")
+
+    def _yahoo_monthly_history(self, ticker: str, start_date: str) -> tuple[list[dict], str]:
+        start = int(datetime.fromisoformat(start_date).timestamp())
+        query = urlencode({"period1": start, "period2": int(time.time()) + 86400, "interval": "1mo", "events": "history"})
+        candidates = []
+        for suffix in (".TW", ".TWO"):
+            try:
+                payload = self._json(f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}{suffix}?{query}", 20)
+                result = payload.get("chart", {}).get("result", [None])[0]
+                timestamps = result.get("timestamp", []) if result else []
+                quote = result.get("indicators", {}).get("quote", [{}])[0] if result else {}
+                closes, volumes = quote.get("close", []), quote.get("volume", [])
+                rows = []
+                for index, stamp in enumerate(timestamps):
+                    close = self._positive(closes[index] if index < len(closes) else None)
+                    if close:
+                        monthly_volume = volumes[index] if index < len(volumes) else None
+                        rows.append({"date": date.fromtimestamp(stamp).isoformat(), "close": close, "Trading_Volume": monthly_volume / 20 if monthly_volume else None})
+                if rows:
+                    candidates.append((rows, suffix))
+            except Exception:
+                continue
+        if candidates:
+            return max(candidates, key=lambda item: len(item[0]))
+        raise ValueError(f"Yahoo Finance 未回傳 {ticker} 的免費歷史月價")
+
+    def _twse_year_multiple(self, ticker: str, year: int) -> dict | None:
+        query_month = date.today().month if year == date.today().year else 12
+        url = f"https://www.twse.com.tw/exchangeReport/BWIBBU?response=json&date={year:04d}{query_month:02d}01&stockNo={ticker}"
+        payload = self._json(url, 20)
+        valid = []
+        for row in payload.get("data", []):
+            pe, pb = self._positive(row[3]), self._positive(row[4])
+            if pe and pb:
+                valid.append({"PER": pe, "PBR": pb, "dividend_yield": self._positive(row[1]), "official_date": str(row[0])})
+        return valid[-1] if valid else None
+
+    def _tpex_year_multiple(self, ticker: str, year: int) -> dict | None:
+        target = date.today() if year == date.today().year else date(year, 12, 31)
+        while target.weekday() >= 5:
+            target -= timedelta(days=1)
+        for _ in range(3):
+            url = f"https://www.tpex.org.tw/www/zh-tw/afterTrading/peQryDate?date={target.isoformat().replace('-', '/')}&id=&response=json"
+            payload = self._json(url, 25)
+            tables = payload.get("tables", [])
+            rows = tables[0].get("data", []) if tables else []
+            match = next((row for row in rows if str(row[0]).strip() == ticker), None)
+            if match:
+                pe, pb = self._positive(match[2]), self._positive(match[6])
+                if pe and pb:
+                    return {"PER": pe, "PBR": pb, "dividend_yield": self._positive(match[5]), "official_date": tables[0].get("date")}
+            target -= timedelta(days=1)
+            while target.weekday() >= 5:
+                target -= timedelta(days=1)
+        return None
+
+    def _official_history(self, ticker: str, start_date: str) -> dict[str, list[dict]]:
+        cache_key = (ticker, start_date[:4])
+        if cache_key in self._official_cache:
+            return self._official_cache[cache_key]
+        prices, suffix = self._yahoo_monthly_history(ticker, start_date)
+        prices_by_year = {}
+        for row in prices:
+            prices_by_year[int(row["date"][:4])] = row
+        years = list(range(int(start_date[:4]), date.today().year + 1))
+        loader = self._twse_year_multiple if suffix == ".TW" else self._tpex_year_multiple
+        multiples_by_year = {}
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {pool.submit(loader, ticker, year): year for year in years}
+            for future in as_completed(futures):
+                try:
+                    value = future.result()
+                    if value:
+                        multiples_by_year[futures[future]] = value
+                except Exception:
+                    continue
+        price_rows, multiple_rows = [], []
+        for year in sorted(set(prices_by_year) & set(multiples_by_year)):
+            price = prices_by_year[year]
+            synthetic_date = price["date"]
+            price_rows.append({"date": synthetic_date, "close": price["close"], "Trading_Volume": price.get("Trading_Volume")})
+            multiple = multiples_by_year[year]
+            multiple_rows.append({"date": synthetic_date, "PER": multiple["PER"], "PBR": multiple["PBR"], "dividend_yield": multiple.get("dividend_yield")})
+        result = {"TaiwanStockPrice": price_rows, "TaiwanStockPER": multiple_rows}
+        self._official_cache[cache_key] = result
+        return result
 
     def _yahoo_latest_price(self, ticker: str) -> tuple[float, str] | None:
         period1 = int(time.time()) - 14 * 86400
@@ -349,20 +447,20 @@ class LiveStockProvider:
             "rules": "最近 5 個完整年度每年有現金殖利率、5 年平均殖利率 > 5%、近 20 交易日平均成交量 >= 10,000 張",
         }
         bundle = {
-            "snapshot": {"ticker": ticker, "company_name": info["name"], "sector": info["industry"], "current_price": current_price, "as_of": price_date, "price_source": "Yahoo Finance" if yahoo_price else "FinMind"},
+            "snapshot": {"ticker": ticker, "company_name": info["name"], "sector": info["industry"], "current_price": current_price, "as_of": price_date, "price_source": "Yahoo Finance" if yahoo_price else "TWSE／TPEx"},
             "history": complete,
             "forecast": {
                 "analyst_eps_low": base_eps * (1 - dispersion), "analyst_eps_median": base_eps, "analyst_eps_high": base_eps * (1 + dispersion),
                 "forecast_bps": forecast_bps, "adjusted_bps": forecast_bps,
-                "recent_quarterly_pb": [row["pb"] for row in quarterly], "recent_pb_source": "FinMind recent observations",
-                "recent_quarterly_pe": [row["pe"] for row in quarterly], "recent_pe_source": "FinMind recent observations",
+                "recent_quarterly_pb": [row["pb"] for row in quarterly], "recent_pb_source": "TWSE／TPEx official observations",
+                "recent_quarterly_pe": [row["pe"] for row in quarterly], "recent_pe_source": "TWSE／TPEx official observations",
                 "pb_fundamental_flags": {"roe_stable_or_improving": eps_improving, "bps_positive_trend": bps_improving, "dividend_stable_or_improving": False, "capital_or_asset_quality_acceptable": True},
                 "fundamental_flags": {"eps_stable_or_improving": eps_improving, "bps_improving": bps_improving, "roe_stable_or_improving": eps_improving, "dividend_stable_or_improving": False},
                 "book_value_quality_score": 0.65, "book_value_quality_note": "免費公開資料自動估算", "accounting_comparability_score": 0.8,
                 "normalized_roe": complete[-1]["eps"] / ((complete[-2]["bps"] + complete[-1]["bps"]) / 2),
                 "normalized_roe_basis": "traditional", "adjusted_bps_basis": "traditional", "sustainable_roe_basis": "traditional",
                 "long_term_growth_rate": 0.025, "roe_pb_confidence": 0.5, "accounting_regime_change": False,
-                "as_of": latest["date"], "data_method": "Yahoo 優先取得最新股價；FinMind 提供歷史股價與 PER/PBR 對齊。EPS=股價/PER，BPS=股價/PBR；預估 EPS 依最新公告口徑與近年趨勢正常化。",
+                "as_of": latest["date"], "data_method": "證交所／櫃買中心免費官方資料提供歷史P/E與P/B；Yahoo免費行情提供歷史及最新股價。EPS=股價/P/E，BPS=股價/P/B；FinMind僅為最後備援。",
                 "recommendation_qualification": recommendation_qualification,
             },
         }

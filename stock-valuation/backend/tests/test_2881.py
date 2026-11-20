@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from backend.data.providers import FixtureProvider, LiveStockProvider
 from backend.valuation.pe_model import DEFAULT_PE_CONFIG, fair_pe
@@ -20,6 +21,13 @@ def fixture_result(**overrides):
 
 
 class Valuation2881Tests(unittest.TestCase):
+    def test_official_exchange_data_is_used_before_finmind(self):
+        provider = LiveStockProvider()
+        official = {"TaiwanStockPrice": [{"date": "2025-12-31", "close": 50.0}], "TaiwanStockPER": []}
+        with patch.object(provider, "_official_history", return_value=official), patch.object(provider, "_json", side_effect=AssertionError("FinMind should not be called")):
+            rows = provider._api("TaiwanStockPrice", "2891", "2020-01-01")
+        self.assertEqual(rows[0]["close"], 50.0)
+
     def test_fvoci_distribution_adds_dividend_overlay_without_capitalizing_at_pe(self):
         provider = FixtureProvider()
         snapshot = provider.get_snapshot("2881")

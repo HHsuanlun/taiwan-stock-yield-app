@@ -39,9 +39,8 @@ def ranking_valuation(ticker: str):
     return calculate(snapshot_data, history_data, forecast_data, {})
 
 
-# Keep interactive stock lookup responsive on the free data tier.  A full
-# market scan must not run automatically in the web process because it can
-# exhaust the shared FinMind request allowance and block normal lookups.
+# Keep interactive stock lookup responsive on free public data sources. A full
+# market scan runs only after the user presses the dedicated button.
 ranking_service = RankingService(
     ranking_valuation,
     cache_seconds=86400,
