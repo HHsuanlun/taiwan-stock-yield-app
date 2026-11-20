@@ -172,6 +172,18 @@ class LiveStockProvider:
                 valid.append({"PER": pe, "PBR": pb, "dividend_yield": self._positive(row[1]), "official_date": str(row[0])})
         return valid[-1] if valid else None
 
+    def _twse_year_price(self, ticker: str, year: int) -> dict | None:
+        query_month = date.today().month if year == date.today().year else 12
+        url = f"https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date={year:04d}{query_month:02d}01&stockNo={ticker}"
+        payload = self._json(url, 20)
+        valid = []
+        for row in payload.get("data", []):
+            close = self._positive(str(row[6]).replace(",", ""))
+            if close:
+                volume = self._positive(str(row[1]).replace(",", ""))
+                valid.append({"close": close, "Trading_Volume": volume})
+        return valid[-1] if valid else None
+
     def _tpex_year_multiple(self, ticker: str, year: int) -> dict | None:
         target = date.today() if year == date.today().year else date(year, 12, 31)
         while target.weekday() >= 5:
@@ -191,32 +203,50 @@ class LiveStockProvider:
                 target -= timedelta(days=1)
         return None
 
+    def _tpex_year_price(self, ticker: str, year: int) -> dict | None:
+        query_month = date.today().month if year == date.today().year else 12
+        url = f"https://www.tpex.org.tw/www/zh-tw/afterTrading/tradingStock?code={ticker}&date={year:04d}/{query_month:02d}/01&id=&response=json"
+        payload = self._json(url, 25)
+        tables = payload.get("tables", [])
+        rows = tables[0].get("data", []) if tables else []
+        valid = []
+        for row in rows:
+            close = self._positive(str(row[6]).replace(",", ""))
+            if close:
+                lots = self._positive(str(row[1]).replace(",", ""))
+                valid.append({"close": close, "Trading_Volume": lots * 1000 if lots else None})
+        return valid[-1] if valid else None
+
     def _official_history(self, ticker: str, start_date: str) -> dict[str, list[dict]]:
         cache_key = (ticker, start_date[:4])
         if cache_key in self._official_cache:
             return self._official_cache[cache_key]
-        prices, suffix = self._yahoo_monthly_history(ticker, start_date)
-        prices_by_year = {}
-        for row in prices:
-            prices_by_year[int(row["date"][:4])] = row
         years = list(range(int(start_date[:4]), date.today().year + 1))
-        loader = self._twse_year_multiple if suffix == ".TW" else self._tpex_year_multiple
-        multiples_by_year = {}
+        try:
+            listed = self._twse_year_multiple(ticker, date.today().year) is not None
+        except Exception:
+            listed = False
+        price_loader = self._twse_year_price if listed else self._tpex_year_price
+        multiple_loader = self._twse_year_multiple if listed else self._tpex_year_multiple
+        annual = {}
+
+        def load_year(year: int):
+            return price_loader(ticker, year), multiple_loader(ticker, year)
+
         with ThreadPoolExecutor(max_workers=4) as pool:
-            futures = {pool.submit(loader, ticker, year): year for year in years}
+            futures = {pool.submit(load_year, year): year for year in years}
             for future in as_completed(futures):
                 try:
-                    value = future.result()
-                    if value:
-                        multiples_by_year[futures[future]] = value
+                    price, multiple = future.result()
+                    if price and multiple:
+                        annual[futures[future]] = (price, multiple)
                 except Exception:
                     continue
         price_rows, multiple_rows = [], []
-        for year in sorted(set(prices_by_year) & set(multiples_by_year)):
-            price = prices_by_year[year]
-            synthetic_date = price["date"]
+        for year in sorted(annual):
+            price, multiple = annual[year]
+            synthetic_date = (date.today() if year == date.today().year else date(year, 12, 31)).isoformat()
             price_rows.append({"date": synthetic_date, "close": price["close"], "Trading_Volume": price.get("Trading_Volume")})
-            multiple = multiples_by_year[year]
             multiple_rows.append({"date": synthetic_date, "PER": multiple["PER"], "PBR": multiple["PBR"], "dividend_yield": multiple.get("dividend_yield")})
         result = {"TaiwanStockPrice": price_rows, "TaiwanStockPER": multiple_rows}
         self._official_cache[cache_key] = result
@@ -460,7 +490,7 @@ class LiveStockProvider:
                 "normalized_roe": complete[-1]["eps"] / ((complete[-2]["bps"] + complete[-1]["bps"]) / 2),
                 "normalized_roe_basis": "traditional", "adjusted_bps_basis": "traditional", "sustainable_roe_basis": "traditional",
                 "long_term_growth_rate": 0.025, "roe_pb_confidence": 0.5, "accounting_regime_change": False,
-                "as_of": latest["date"], "data_method": "證交所／櫃買中心免費官方資料提供歷史P/E與P/B；Yahoo免費行情提供歷史及最新股價。EPS=股價/P/E，BPS=股價/P/B；FinMind僅為最後備援。",
+                "as_of": latest["date"], "data_method": "證交所／櫃買中心免費官方資料提供歷史股價、P/E與P/B；Yahoo僅在可用時補最新股價。EPS=股價/P/E，BPS=股價/P/B；FinMind僅為最後備援。",
                 "recommendation_qualification": recommendation_qualification,
             },
         }
