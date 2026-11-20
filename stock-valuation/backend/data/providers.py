@@ -279,9 +279,9 @@ class LiveStockProvider:
             for url in NAME_SOURCES:
                 try:
                     for row in self._json(url, 8):
-                        code = str(row.get("公司代號", "")).strip()
-                        name = str(row.get("公司簡稱", "")).strip()
-                        industry = str(row.get("產業別", row.get("產業類別", "台股"))).strip()
+                        code = str(row.get("公司代號", row.get("SecuritiesCompanyCode", row.get("Code", "")))).strip()
+                        name = str(row.get("公司簡稱", row.get("CompanyAbbreviation", row.get("Name", "")))).strip()
+                        industry = str(row.get("產業別", row.get("SecuritiesIndustryCode", row.get("產業類別", "台股")))).strip()
                         if code and name:
                             result[code] = {"name": name, "industry": industry or "台股"}
                 except Exception:

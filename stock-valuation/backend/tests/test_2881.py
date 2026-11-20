@@ -55,6 +55,16 @@ class Valuation2881Tests(unittest.TestCase):
         self.assertEqual(provider.resolve("2882"), "2882")
         self.assertEqual(provider.resolve("國泰金"), "2882")
 
+    def test_otc_english_openapi_fields_are_added_to_catalog(self):
+        provider = LiveStockProvider()
+        def fake_json(url, timeout=20):
+            if "tpex.org.tw" in url:
+                return [{"SecuritiesCompanyCode": "5483", "CompanyAbbreviation": "中美晶", "SecuritiesIndustryCode": "24"}]
+            return []
+        with patch.object(provider, "_json", side_effect=fake_json):
+            self.assertEqual(provider.resolve("5483"), "5483")
+            self.assertEqual(provider.resolve("中美晶"), "5483")
+
     def test_common_etf_is_resolved_but_not_forced_into_stock_model(self):
         provider = LiveStockProvider()
         provider._names = (10**20, {"0050": {"name": "元大台灣50", "industry": "ETF"}})
