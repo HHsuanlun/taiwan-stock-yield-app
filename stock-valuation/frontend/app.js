@@ -12,6 +12,15 @@ const CACHE_FALLBACK_MS=7*24*60*60*1000;
 function money(value) { return Number(value).toFixed(2); }
 function setText(id, value) { const element=$(id); if(element) element.textContent=value; }
 
+async function responseJson(response, fallbackMessage){
+  const body=await response.text();
+  if(!body.trim())throw new Error(`${fallbackMessage}（伺服器沒有回傳完整內容，請稍後再試）`);
+  let data;
+  try{data=JSON.parse(body);}catch(_){throw new Error(`${fallbackMessage}（伺服器回應格式異常，HTTP ${response.status}）`);}
+  if(!response.ok)throw new Error(data.detail||`${fallbackMessage}（HTTP ${response.status}）`);
+  return data;
+}
+
 function readValuationCache(){
   try{return JSON.parse(localStorage.getItem(VALUATION_CACHE_KEY)||"{}");}catch(_){return {};}
 }
@@ -105,8 +114,7 @@ function renderRanking(payload) {
 async function loadRanking() {
   try{
     const res=await fetch("/api/ranking");
-    if(!res.ok)throw new Error((await res.json()).detail||"排行榜暫時無法載入");
-    renderRanking(await res.json());
+    renderRanking(await responseJson(res,"排行榜暫時無法載入"));
   }catch(error){
     $("rankingList").innerHTML=`<p class="ranking-loading error">${error.message}</p>`;
     setText("rankingStatus","載入失敗");
@@ -181,7 +189,7 @@ async function calculate(addToRanking=false) {
   const canUseCache=!userCoreOverride&&!userWeightOverride;
   const cached=canUseCache?findCachedValuation(payload.ticker,CACHE_FRESH_MS):null;
   if(cached){render(cached.data);if(addToRanking)saveUserRankingStock(cached.data);$("ticker").value=latest.ticker;$("searchHint").textContent=`已從本機快取載入 ${latest.company_name} ${latest.ticker}（儲存於 ${cacheTime(cached.saved_at)}）${addToRanking?"；已加入本次排名。":"。"}`;return;}
-  try{const res=await fetch("/api/valuation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!res.ok)throw new Error((await res.json()).detail||"估值服務暫時無法使用");const data=await res.json();render(data);if(canUseCache)saveCachedValuation(data);if(canUseCache&&addToRanking)saveUserRankingStock(data);$("ticker").value=latest.ticker;$("searchHint").textContent=`已載入 ${latest.company_name} ${latest.ticker}${addToRanking?"；已加入本次排名。":"。"}`;$("searchHint").className=""}catch(err){const stale=canUseCache?findCachedValuation(payload.ticker,CACHE_FALLBACK_MS):null;if(stale){render(stale.data);if(addToRanking)saveUserRankingStock(stale.data);$("ticker").value=latest.ticker;$("searchHint").textContent=`即時來源暫時無法使用，顯示 ${cacheTime(stale.saved_at)} 儲存的資料${addToRanking?"並加入本次排名":""}：${err.message}`;$("searchHint").className="error"}else{$("searchHint").textContent=err.message;$("searchHint").className="error"}}
+  try{const res=await fetch("/api/valuation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await responseJson(res,"估值服務暫時無法使用");render(data);if(canUseCache)saveCachedValuation(data);if(canUseCache&&addToRanking)saveUserRankingStock(data);$("ticker").value=latest.ticker;$("searchHint").textContent=`已載入 ${latest.company_name} ${latest.ticker}${addToRanking?"；已加入本次排名。":"。"}`;$("searchHint").className=""}catch(err){const stale=canUseCache?findCachedValuation(payload.ticker,CACHE_FALLBACK_MS):null;if(stale){render(stale.data);if(addToRanking)saveUserRankingStock(stale.data);$("ticker").value=latest.ticker;$("searchHint").textContent=`即時來源暫時無法使用，顯示 ${cacheTime(stale.saved_at)} 儲存的資料${addToRanking?"並加入本次排名":""}：${err.message}`;$("searchHint").className="error"}else{$("searchHint").textContent=err.message;$("searchHint").className="error"}}
 }
 
 function syncControls(){setText("epsOut",Number($("eps").value).toFixed(2));setText("bpsOut",Number($("bps").value).toFixed(1));const w=Number($("peWeight").value);setText("weightOut",`P/E ${w.toFixed(1)}% · P/B ${(100-w).toFixed(1)}%`);calculate()}
