@@ -165,11 +165,19 @@ class LiveStockProvider:
         query_month = date.today().month if year == date.today().year else 12
         url = f"https://www.twse.com.tw/exchangeReport/BWIBBU?response=json&date={year:04d}{query_month:02d}01&stockNo={ticker}"
         payload = self._json(url, 20)
+        fields = payload.get("fields", [])
+        try:
+            pe_index, pb_index = fields.index("本益比"), fields.index("股價淨值比")
+            yield_index = fields.index("殖利率(%)")
+        except ValueError:
+            return None
         valid = []
         for row in payload.get("data", []):
-            pe, pb = self._positive(row[3]), self._positive(row[4])
+            if len(row) <= max(pe_index, pb_index, yield_index):
+                continue
+            pe, pb = self._positive(row[pe_index]), self._positive(row[pb_index])
             if pe and pb:
-                valid.append({"PER": pe, "PBR": pb, "dividend_yield": self._positive(row[1]), "official_date": str(row[0])})
+                valid.append({"PER": pe, "PBR": pb, "dividend_yield": self._positive(row[yield_index]), "official_date": str(row[0])})
         return valid[-1] if valid else None
 
     def _twse_year_price(self, ticker: str, year: int) -> dict | None:
@@ -233,7 +241,9 @@ class LiveStockProvider:
         def load_year(year: int):
             return price_loader(ticker, year), multiple_loader(ticker, year)
 
-        with ThreadPoolExecutor(max_workers=4) as pool:
+        # TWSE/TPEx may throttle bursts from shared cloud IPs. Two workers are
+        # slower but preserve complete annual history on Render's free tier.
+        with ThreadPoolExecutor(max_workers=2) as pool:
             futures = {pool.submit(load_year, year): year for year in years}
             for future in as_completed(futures):
                 try:

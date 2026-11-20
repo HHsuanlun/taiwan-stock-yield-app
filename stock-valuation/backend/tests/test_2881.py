@@ -28,6 +28,17 @@ class Valuation2881Tests(unittest.TestCase):
             rows = provider._api("TaiwanStockPrice", "2891", "2020-01-01")
         self.assertEqual(rows[0]["close"], 50.0)
 
+    def test_twse_legacy_four_column_multiple_format(self):
+        provider = LiveStockProvider()
+        payload = {
+            "fields": ["日期", "本益比", "殖利率(%)", "股價淨值比"],
+            "data": [["104年12月31日", "9.40", "6.59", "1.01"]],
+        }
+        with patch.object(provider, "_json", return_value=payload):
+            row = provider._twse_year_multiple("2886", 2015)
+        self.assertEqual(row["PER"], 9.40)
+        self.assertEqual(row["PBR"], 1.01)
+
     def test_fvoci_distribution_adds_dividend_overlay_without_capitalizing_at_pe(self):
         provider = FixtureProvider()
         snapshot = provider.get_snapshot("2881")
