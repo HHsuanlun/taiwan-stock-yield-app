@@ -20,6 +20,27 @@ def fixture_result(**overrides):
 
 
 class Valuation2881Tests(unittest.TestCase):
+    def test_fvoci_distribution_adds_dividend_overlay_without_capitalizing_at_pe(self):
+        provider = FixtureProvider()
+        snapshot = provider.get_snapshot("2881")
+        snapshot["ticker"] = "2891"
+        snapshot["company_name"] = "中信金"
+        forecast = provider.get_forecasts("2881")
+        baseline = calculate(snapshot, provider.get_history("2881"), forecast, {})
+        forecast["fvoci_distribution"] = {
+            "as_of": "2026-10", "reported_eps_ytd": 3.45,
+            "adjusted_retained_earnings_per_share_ytd": 7.57,
+            "fvoci_per_share_ytd": 4.12, "fvoci_per_share_low": 4.12,
+            "fvoci_per_share_base": 4.53, "fvoci_per_share_high": 4.94,
+            "payout_rate": 0.632, "payout_basis": "test", "source": "test",
+        }
+        adjusted = calculate(snapshot, provider.get_history("2881"), forecast, {})
+        expected_overlay = 4.53 * 0.632
+        self.assertAlmostEqual(adjusted["core_pe_target_price"], baseline["pe_target_price"], places=2)
+        self.assertAlmostEqual(adjusted["pe_target_price"] - adjusted["core_pe_target_price"], expected_overlay, places=2)
+        self.assertAlmostEqual(adjusted["fvoci_analysis"]["total_dividend_scenarios"]["base"], (forecast["analyst_eps_median"] + 4.53) * 0.632, places=3)
+        self.assertIn("不乘P/E", adjusted["fvoci_analysis"]["valuation_treatment"])
+
     def test_stock_name_and_code_resolution(self):
         provider = LiveStockProvider()
         provider._names = (10**20, {"2881": {"name": "富邦金", "industry": "金融"}, "2882": {"name": "國泰金", "industry": "金融"}})

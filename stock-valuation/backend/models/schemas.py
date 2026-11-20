@@ -41,6 +41,7 @@ class ValuationResult(BaseModel):
     company_name: str
     current_price: float
     fair_pe: float
+    core_pe_target_price: float
     pe_target_price: float
     fair_pb: float
     pb_target_price: float
@@ -55,6 +56,7 @@ class ValuationResult(BaseModel):
     valuation_heat: dict[str, Any]
     capital_efficiency: dict[str, Any]
     cross_validation: dict[str, Any]
+    fvoci_analysis: dict[str, Any] | None = None
     recommendation_qualification: dict[str, Any] | None = None
     historical: list[HistoricalPoint]
     assumptions: dict[str, Any]

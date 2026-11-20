@@ -210,6 +210,11 @@
 .earnings-reference > p { color:var(--ink); font-size:12px; }
 .earnings-reference > .reference-metrics { padding:8px 10px; border-radius:6px; background:#eaf4ed; color:#23613a; font-weight:700; }
 .earnings-reference > small { color:var(--muted); font-size:11px; }
+.fvoci-panel { margin:12px 0; padding:11px; border:1px solid #dfc98e; border-radius:8px; background:#fffaf0; }
+.fvoci-panel[hidden] { display:none; }
+.fvoci-panel > span { display:block; color:#8a6418; font-size:10px; font-weight:800; letter-spacing:.08em; }
+.fvoci-panel > b { display:block; margin:3px 0 8px; color:#a14d22; font-size:12px; }
+.fvoci-panel dl { margin:0; }
 
 @media (max-width: 600px) {
   .ranking-panel { padding:13px; }

@@ -35,6 +35,56 @@ COMMON_STOCKS = {
     "0050": "元大台灣50", "0056": "元大高股息",
 }
 ETF_TICKERS = {"0050", "0056"}
+FVOCI_DISTRIBUTION_ASSUMPTIONS = {
+    "2881": {
+        "as_of": "2026-09",
+        "reported_eps_ytd": 8.80,
+        "adjusted_retained_earnings_per_share_ytd": 17.56,
+        "fvoci_per_share_ytd": 8.76,
+        "fvoci_per_share_low": 8.76,
+        "fvoci_per_share_base": 10.22,
+        "fvoci_per_share_high": 11.68,
+        "payout_rate": 0.508,
+        "payout_basis": "採富邦金最近一年度普通股現金股利／正式EPS約50.8%，並假設FVOCI採相同配發率",
+        "source": "富邦金2026年前9月：正式EPS 8.80元；含已實現FVOCI對保留盈餘影響每股17.56元；年度情境由9個月實績至直線年化",
+    },
+    "2882": {
+        "as_of": "2026-09",
+        "reported_eps_ytd": 6.94,
+        "adjusted_retained_earnings_per_share_ytd": 15.01,
+        "fvoci_per_share_ytd": 8.07,
+        "fvoci_per_share_low": 8.07,
+        "fvoci_per_share_base": 9.42,
+        "fvoci_per_share_high": 10.76,
+        "payout_rate": 0.496,
+        "payout_basis": "採國泰金2026年現金股利3.5元／2025正式EPS7.06元約49.6%，並假設FVOCI採相同配發率",
+        "source": "國泰金2026年前9月：正式EPS 6.94元；含已實現FVOCI對保留盈餘影響每股15.01元；年度情境由9個月實績至直線年化",
+    },
+    "2883": {
+        "as_of": "2026-10",
+        "reported_eps_ytd": 2.29,
+        "adjusted_retained_earnings_per_share_ytd": 5.79,
+        "fvoci_per_share_ytd": 3.50,
+        "fvoci_per_share_low": 3.50,
+        "fvoci_per_share_base": 3.85,
+        "fvoci_per_share_high": 4.20,
+        "payout_rate": 0.57,
+        "payout_basis": "採凱基金公司公告最近一年度普通股現金股息配發率57%，並假設FVOCI採相同配發率",
+        "source": "凱基金2026年前10月：正式EPS 2.29元；FVOCI處分利益602.57億元，依公告獲利與EPS換算每股約3.50元；年度情境由10個月實績至直線年化",
+    },
+    "2891": {
+        "as_of": "2026-10",
+        "reported_eps_ytd": 3.45,
+        "adjusted_retained_earnings_per_share_ytd": 7.57,
+        "fvoci_per_share_ytd": 4.12,
+        "fvoci_per_share_low": 4.12,
+        "fvoci_per_share_base": 4.53,
+        "fvoci_per_share_high": 4.94,
+        "payout_rate": 0.632,
+        "payout_basis": "假設 FVOCI 與近年正式 EPS 採相同 63.2% 配發率",
+        "source": "中信金2026年前10月自結：正式EPS 3.45元；含已實現FVOCI對保留盈餘影響每股7.57元",
+    }
+}
 PEER_GROUPS = {
     "bank": ("2880", "2884", "2886", "2887", "2890", "2891", "2892", "5880"),
     "insurance": ("2881", "2882"),
@@ -317,6 +367,7 @@ class LiveStockProvider:
             },
         }
         bundle["forecast"]["sector_peer_regime"] = self.peer_regime(ticker)
+        bundle["forecast"]["fvoci_distribution"] = FVOCI_DISTRIBUTION_ASSUMPTIONS.get(ticker)
         self._cache[ticker] = (time.time(), bundle)
         return bundle
 

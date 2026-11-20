@@ -102,7 +102,33 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
         for row_name in ("bear", "base", "bull")
     ]
     pb["capital_efficiency"] = capital_efficiency
-    pe_price = base_eps * base_pe
+    core_pe_price = base_eps * base_pe
+    fvoci_config = forecast.get("fvoci_distribution")
+    fvoci_analysis = None
+    fvoci_per_share = {"bear": 0.0, "base": 0.0, "bull": 0.0}
+    fvoci_dividend = {"bear": 0.0, "base": 0.0, "bull": 0.0}
+    if fvoci_config:
+        payout_rate = float(fvoci_config["payout_rate"])
+        fvoci_per_share = {
+            "bear": float(fvoci_config["fvoci_per_share_low"]),
+            "base": float(fvoci_config["fvoci_per_share_base"]),
+            "bull": float(fvoci_config["fvoci_per_share_high"]),
+        }
+        fvoci_dividend = {name: value * payout_rate for name, value in fvoci_per_share.items()}
+        fvoci_analysis = {
+            **fvoci_config,
+            "formal_eps_scenarios": {"bear": bear_eps, "base": base_eps, "bull": bull_eps},
+            "formal_dividend_scenarios": {"bear": bear_eps * payout_rate, "base": base_eps * payout_rate, "bull": bull_eps * payout_rate},
+            "fvoci_dividend_scenarios": fvoci_dividend,
+            "total_dividend_scenarios": {
+                "bear": (bear_eps + fvoci_per_share["bear"]) * payout_rate,
+                "base": (base_eps + fvoci_per_share["base"]) * payout_rate,
+                "bull": (bull_eps + fvoci_per_share["bull"]) * payout_rate,
+            },
+            "valuation_treatment": "FVOCI不乘P/E；僅將假設可配發的FVOCI現金股利加到核心P/E價值。",
+            "assumption_level": "樂觀假設／待2027年實際股利驗證",
+        }
+    pe_price = core_pe_price + fvoci_dividend["base"]
     pb_price = bps * fair_pb
     if overrides.get("weights_are_final"):
         pe_weight = float(overrides.get("pe_weight", 0.50))
@@ -137,9 +163,10 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
     }
     rounded_expanded_weights["adjusted_pb"] = round(1 - rounded_expanded_weights["pe"] - rounded_expanded_weights["traditional_pb"], 3)
 
-    bear_price = bear_eps * bear_pe
-    base_price = base_eps * base_pe
-    bull_price = bull_eps * bull_pe
+    core_pe_scenario_prices = {"bear": bear_eps * bear_pe, "base": base_eps * base_pe, "bull": bull_eps * bull_pe}
+    bear_price = core_pe_scenario_prices["bear"] + fvoci_dividend["bear"]
+    base_price = core_pe_scenario_prices["base"] + fvoci_dividend["base"]
+    bull_price = core_pe_scenario_prices["bull"] + fvoci_dividend["bull"]
     pe_scenario_prices = {"bear": bear_price, "base": base_price, "bull": bull_price}
     pb_scenario_prices = pb["traditional"]["target_prices"]
     composite_scenario_prices = {
@@ -149,7 +176,7 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
     current_price = snapshot["current_price"]
     upside = (fair_value / current_price - 1) * 100
     price_to_fair = current_price / fair_value
-    required_eps = current_price / base_pe
+    required_eps = max(0.0, current_price - fvoci_dividend["base"]) / base_pe
     current_pb = current_price / bps
     valuation_heat = calculate_valuation_heat(
         current_price=current_price,
@@ -177,6 +204,7 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
         "company_name": snapshot["company_name"],
         "current_price": current_price,
         "fair_pe": round(base_pe, 2),
+        "core_pe_target_price": round(core_pe_price, 2),
         "pe_target_price": round(pe_price, 2),
         "fair_pb": fair_pb,
         "pb_target_price": round(pb_price, 2),
@@ -185,7 +213,7 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
             "primary_fair_value": round(fair_value, 2),
             "includes_adjusted_pb": False,
             "label": "可驗證資料基礎合理價",
-            "basis": "使用 P/E 與 Sustainable ROE P/B；大型金融同業 Regime 確認後，僅對 P/B 三情境作受限校準",
+            "basis": "使用 P/E 與 Sustainable ROE P/B；已驗證FVOCI資料時，只加計假設可配發現金股利，不將一次性利益乘上P/E倍數",
             "expanded_fair_value": round(expanded_fair_value, 2),
             "expanded_pb_family_value": round(expanded_pb_value, 2),
             "expanded_includes_provisional": adjusted["status"] == "provisional",
@@ -200,6 +228,7 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
         "valuation_heat": valuation_heat,
         "capital_efficiency": capital_efficiency,
         "cross_validation": cross_validation,
+        "fvoci_analysis": fvoci_analysis,
         "recommendation_qualification": forecast.get("recommendation_qualification"),
         "historical": history,
         "assumptions": {
@@ -273,6 +302,8 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
                     "bps": pb["bps_scenarios"][name],
                     "pb": pb["pb_scenarios"][name],
                     "pe_value": round(pe_scenario_prices[name], 2),
+                    "core_pe_value": round(core_pe_scenario_prices[name], 2),
+                    "fvoci_dividend_overlay": round(fvoci_dividend[name], 2),
                     "pb_value": round(pb_scenario_prices[name], 2),
                     "composite_value": round(composite_scenario_prices[name], 2),
                 }
@@ -294,6 +325,6 @@ def calculate(snapshot: dict, history: list[dict], forecast: dict, overrides: di
         ] if forecast.get("data_method") else [
             {"name": "富邦金控股價資訊", "as_of": snapshot["as_of"], "note": "參考股價 NT$150.50"},
             {"name": "Golden test fixture", "as_of": forecast["as_of"], "note": "歷史 EPS、P/E、BPS 與預估資料用於演算法驗證"},
-        ]),
-        "model_version": "tw-valuation-mvp-2.8",
+        ]) + ([{"name": "FVOCI分配假設", "as_of": fvoci_config["as_of"], "note": fvoci_config["source"]}] if fvoci_config else []),
+        "model_version": "tw-valuation-mvp-2.9",
     }
