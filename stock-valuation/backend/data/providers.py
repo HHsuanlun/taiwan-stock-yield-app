@@ -241,17 +241,19 @@ class LiveStockProvider:
         def load_year(year: int):
             return price_loader(ticker, year), multiple_loader(ticker, year)
 
-        # TWSE/TPEx may throttle bursts from shared cloud IPs. Two workers are
-        # slower but preserve complete annual history on Render's free tier.
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            futures = {pool.submit(load_year, year): year for year in years}
-            for future in as_completed(futures):
+        # TWSE/TPEx currently rejects simultaneous requests from some shared
+        # Render IPs. Load one year at a time and retry once so one temporary
+        # 429/5xx response cannot erase the stock's entire history.
+        for year in years:
+            for attempt in range(2):
                 try:
-                    price, multiple = future.result()
+                    price, multiple = load_year(year)
                     if price and multiple:
-                        annual[futures[future]] = (price, multiple)
+                        annual[year] = (price, multiple)
+                        break
                 except Exception:
-                    continue
+                    if attempt == 0:
+                        time.sleep(0.25)
         price_rows, multiple_rows = [], []
         for year in sorted(annual):
             price, multiple = annual[year]
