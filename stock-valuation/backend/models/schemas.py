@@ -43,6 +43,7 @@ class ValuationResult(BaseModel):
     fair_pe: float
     core_pe_target_price: float
     pe_target_price: float
+    fvoci_adjusted_pe_target_price: float | None = None
     fair_pb: float
     pb_target_price: float
     fair_value: float

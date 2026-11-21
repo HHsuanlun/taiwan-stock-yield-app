@@ -56,7 +56,10 @@ class Valuation2881Tests(unittest.TestCase):
         adjusted = calculate(snapshot, provider.get_history("2881"), forecast, {})
         expected_overlay = 4.53 * 0.632
         self.assertAlmostEqual(adjusted["core_pe_target_price"], baseline["pe_target_price"], places=2)
-        self.assertAlmostEqual(adjusted["pe_target_price"] - adjusted["core_pe_target_price"], expected_overlay, places=2)
+        self.assertAlmostEqual(adjusted["pe_target_price"], adjusted["core_pe_target_price"], places=2)
+        self.assertAlmostEqual(adjusted["fvoci_adjusted_pe_target_price"] - adjusted["core_pe_target_price"], expected_overlay, places=2)
+        self.assertAlmostEqual(adjusted["fair_value"], baseline["fair_value"], places=2)
+        self.assertGreater(adjusted["fvoci_analysis"]["adjusted_primary_fair_value"], adjusted["fair_value"])
         self.assertAlmostEqual(adjusted["fvoci_analysis"]["total_dividend_scenarios"]["base"], (forecast["analyst_eps_median"] + 4.53) * 0.632, places=3)
         self.assertIn("不乘P/E", adjusted["fvoci_analysis"]["valuation_treatment"])
 
@@ -222,6 +225,13 @@ class Valuation2881Tests(unittest.TestCase):
         self.assertAlmostEqual(sum(result["normalized_weights"]), 1.0)
         self.assertLessEqual(result["normalized_weights"][0], 0.25)
         self.assertAlmostEqual(result["regression_r2"], result["correlation"] ** 2)
+
+    def test_regression_is_disabled_outside_observed_eps_range(self):
+        history = FixtureProvider().get_history("2881")
+        result = fair_pe(history, max(row["eps"] for row in history) * 1.5, (0.25, 0.45, 0.30))
+        self.assertTrue(result["regression_extrapolated"])
+        self.assertEqual(result["normalized_weights"][0], 0.0)
+        self.assertAlmostEqual(sum(result["normalized_weights"]), 1.0)
 
     def test_positive_rerating_increases_current_regime_weight(self):
         result = fixture_result()["assumptions"]["rerating"]

@@ -48,12 +48,12 @@
       </div>
 
       <div class="scenario-grid">
-        <article class="scenario bear"><span>保守情境</span><strong id="bearValue">—</strong><small id="bearInputs">—</small><small class="scenario-weight" id="bearWeight">—</small></article>
-        <article class="scenario base"><span>中性情境</span><strong id="fairValue">—</strong><small id="baseInputs">—</small><small class="scenario-weight" id="baseWeight">—</small><em>綜合中性估值</em></article>
-        <article class="scenario bull"><span>樂觀情境</span><strong id="bullValue">—</strong><small id="bullInputs">—</small><small class="scenario-weight" id="bullWeight">—</small></article>
+        <article class="scenario bear"><span>保守情境</span><strong id="bearValue">—</strong><small id="bearInputs">—</small><small class="scenario-weight" id="bearWeight">—</small><small class="fvoci-scenario" id="bearFvoci" hidden>—</small></article>
+        <article class="scenario base"><span>中性情境</span><strong id="fairValue">—</strong><small id="baseInputs">—</small><small class="scenario-weight" id="baseWeight">—</small><small class="fvoci-scenario" id="baseFvoci" hidden>—</small><em>核心綜合估值</em></article>
+        <article class="scenario bull"><span>樂觀情境</span><strong id="bullValue">—</strong><small id="bullInputs">—</small><small class="scenario-weight" id="bullWeight">—</small><small class="fvoci-scenario" id="bullFvoci" hidden>—</small></article>
         <article class="upside"><span>相對 Primary 合理價</span><strong id="upside">—</strong><small><b id="classification">—</b> · 模型信心 <b id="confidence">—</b></small></article>
       </div>
-      <p class="scenario-note">三個情境均以 P/E 與 Sustainable ROE P/B 的對應情境價加權；預設權重與 Primary／可驗證資料基礎合理價完全一致。若大型金融同業的 P/B 結構性變化獲確認，三個情境會同步受限校準（單次最多 ±10%），避免模型過度保守或過度樂觀。</p>
+      <p class="scenario-note">三個主要情境與排名均只使用所有股票一致的核心 P/E＋P/B。公司有正式 FVOCI 資料時，另列「含 FVOCI 暫估」，不影響 Primary 與便宜／昂貴判斷。</p>
 
       <aside class="panel assumptions">
           <div class="panel-head"><div><p class="eyebrow">MANUAL OVERRIDE</p><h3>調整核心假設</h3></div><button id="reset" class="text-button" type="button">恢復預設</button></div>
@@ -112,6 +112,6 @@
       </article>
     </section>
   </main>
-  <script src="/static/app.js?v=4.3" defer></script>
+  <script src="/static/app.js?v=4.4" defer></script>
 </body>
 </html>

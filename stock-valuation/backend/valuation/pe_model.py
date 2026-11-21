@@ -84,6 +84,12 @@ def fair_pe(
     historical_median = median(pe_values)
     recent_median = median(pe_values[-3:])
     hist_weights = reliable_historical_weights(weights, r_squared, cfg)
+    regression_extrapolated = forecast_eps < min(eps_values) or forecast_eps > max(eps_values)
+    if regression_extrapolated:
+        unused = hist_weights["regression"]
+        hist_weights["regression"] = 0.0
+        hist_weights["historical"] += unused * 0.30
+        hist_weights["recent"] += unused * 0.70
     historical_fair = (
         historical_median * hist_weights["historical"]
         + recent_median * hist_weights["recent"]
@@ -160,6 +166,7 @@ def fair_pe(
         "regression_slope": slope,
         "correlation": corr,
         "regression_r2": r_squared,
+        "regression_extrapolated": regression_extrapolated,
         "normalized_weights": [hist_weights["regression"], hist_weights["recent"], hist_weights["historical"]],
         "history_count": len(usable),
         "current_regime_available": regime_available,
